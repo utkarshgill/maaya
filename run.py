@@ -1,5 +1,11 @@
 import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.animation import FuncAnimation
 import time
+
+plt.axis('off')
+
 
 class Vector3D:
     def __init__(self, x=0, y=0, z=0):
@@ -121,49 +127,72 @@ class PhysicsObject:
     def __repr__(self):
         return f"PhysicsObject(position={self.position}, velocity={self.velocity}, acceleration={self.acceleration}, mass={self.mass})"
 
+
+
 class World:
-    def __init__(self, g=10):
+    def __init__(self, g=9.8):
         self.objects = []
-        self.g = g
+        self.time = 0
+        self.g = g  # gravitational acceleration
 
     def add_object(self, obj):
         self.objects.append(obj)
 
-    def update(self, step, dt):
+    def update(self, dt):
         for obj in self.objects:
-            print(obj.position.v[2]) if step%100 == 0 else None
-            obj.apply_force(Vector3D(0, 0, -self.g) * obj.mass)
+            obj.apply_force(Vector3D(0, 0, -self.g * obj.mass))  # apply gravity force
             obj.update(dt)
-            if obj.position.v[2] == 0:
-                obj.bounce()
+            pos = obj.position.v[2]
+            print(pos)
+            if pos < 0:
+                obj.bounce()  # handle bounce
 
-    def run(self, duration, dt, real_time=False):
-        steps = int(duration / dt)
-        start_time = time.time()
-        for step in range(steps):
-            self.update(step, dt)
-            if real_time:
-                # elapsed = time.time() - start_time
-                # sleep_time = max(0, dt - elapsed)
-                time.sleep(dt)
-                start_time = time.time()
-            # print(time.time()) if step%(1/dt) == 0 else None
+    def simulate(self, frames, render=False):
+        if render:
+            renderer = Renderer(self)
+            renderer.run(1000) 
+        else:
+            for _ in range(frames):
+                self.update(0.01)
 
+class Renderer:
+    def __init__(self, world):
+        self.world = world
+        self.fig = plt.figure()
+        self.ax = self.fig.add_subplot(111, projection='3d')
+        self.ax.set_xlim([-10, 10])
+        self.ax.set_ylim([-10, 10])
+        self.ax.set_zlim([0, 20])
+        self.scatters = []
+        # self.ax.grid(False) # Remove gridlines
+        self.ax.set_xticklabels([])
+        self.ax.set_yticklabels([])
+        self.ax.set_zticklabels([])
+        for _ in self.world.objects:
+            scatter, = self.ax.plot([], [], [], 'o', markersize=8)
+            self.scatters.append(scatter)
 
-    def reset(self):
-        for obj in self.objects:
-            obj.position = Vector3D()
-            obj.velocity = Vector3D()
-            obj.acceleration = Vector3D()
-            obj.orientation = Quaternion()
-            obj.angular_velocity = Quaternion()
+    def init_func(self):
+        for scatter in self.scatters:
+            scatter.set_data([], [])
+            scatter.set_3d_properties([])
+        return self.scatters
 
-    def __repr__(self):
-        return f"World(objects={self.objects})"
-    
+    def update_func(self, frame):
+        self.world.update(0.01)  # update physics
+        for i, obj in enumerate(self.world.objects):
+            x, y, z = obj.position.v
+            self.scatters[i].set_data([x], [y])
+            self.scatters[i].set_3d_properties([z])
+        return self.scatters
+
+    def run(self, frames):
+        anim = FuncAnimation(self.fig, self.update_func, frames=frames, init_func=self.init_func,
+                             interval=10, blit=True)
+        plt.show()
+
+# Example usage:
 world = World()
-ball = PhysicsObject(position=Vector3D(0, 0, 1.0))
-world.add_object(ball)
-world.run(100, 0.01, real_time=1)
-
-
+quad = PhysicsObject(position=Vector3D(0, 0, 10.0), mass=1.0)
+world.add_object(quad) 
+world.simulate(1000, render=True)
