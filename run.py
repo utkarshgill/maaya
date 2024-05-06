@@ -4,9 +4,6 @@ from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.animation import FuncAnimation
 import time
 
-plt.axis('off')
-
-
 class Vector3D:
     def __init__(self, x=0, y=0, z=0):
         self.v = np.array([x, y, z], dtype=float)
@@ -115,19 +112,12 @@ class PhysicsObject:
         self.orientation += self.angular_velocity * dt
         self.orientation.normalize() 
 
-    def bounce(self):
-        # Bounce logic here
-        self.velocity.v[2] = -self.velocity.v[2] 
-
     def apply_force(self, force):
-        # Assuming force is a Vector3D instance
         # F = m * a, therefore a = F / m
         self.acceleration += Vector3D(*(force.v / self.mass))
 
     def __repr__(self):
         return f"PhysicsObject(position={self.position}, velocity={self.velocity}, acceleration={self.acceleration}, mass={self.mass})"
-
-
 
 class World:
     def __init__(self, g=9.8):
@@ -143,9 +133,12 @@ class World:
             obj.apply_force(Vector3D(0, 0, -self.g * obj.mass))  # apply gravity force
             obj.update(dt)
             pos = obj.position.v[2]
-            print(pos)
-            if pos < 0:
-                obj.bounce()  # handle bounce
+
+            # manual impl of floor, fix after rigid body
+            # print(pos)
+            if pos <= 0:
+                obj.position.v[2] = 0  # Reset height to floor level
+                obj.velocity.v[2] *= -1
 
     def simulate(self, frames, render=False):
         if render:
@@ -192,7 +185,7 @@ class Renderer:
         plt.show()
 
 # Example usage:
-world = World()
+world = World(g=10)
 quad = PhysicsObject(position=Vector3D(0, 0, 10.0), mass=1.0)
 world.add_object(quad) 
 world.simulate(1000, render=True)

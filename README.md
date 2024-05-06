@@ -1,2 +1,2 @@
 # maaya
-Physics engine.
+A rigid body physics engine: Dynamics simulation + Collision detection.
