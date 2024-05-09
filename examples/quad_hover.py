@@ -1,4 +1,6 @@
 import numpy as np
+import sys
+sys.path.insert(0, '/Users/engelbart/Desktop/stuff')
 from maaya import Vector3D, Body, World, Renderer
 
 class QuadCopter(Body):
@@ -30,11 +32,11 @@ class QuadCopter(Body):
 
         super().__init__(position, velocity, acceleration, mass, orientation, angular_velocity, inertia)
         
-    def update(self, dt):
+    # def update(self, dt):
 
-        T = self.ctrl.update(self.position.v[2])
-        self.command([T, 0, 0, 0])
-        super().update(dt)
+    #     T = self.ctrl.update(self.position.v[2])
+    #     self.command([T, 0, 0, 0])
+    #     super().update(dt)
 
     def command(self, c):
         T, R, Y, P = c
@@ -68,12 +70,11 @@ class PIDController:
         return output
 
 frames = 1000
-world = World(g=9.81)
+world = World()
 z_ctrl = PIDController(10.0, 10.0, 5.0, setpoint=10.0, dt=0.01)
 quad = QuadCopter(position=Vector3D(0, 0, 10.0), mass=1.0, ctrl=z_ctrl)
 
 world.add_object(quad) 
 
 r = Renderer(world)
-
 r.run(frames)

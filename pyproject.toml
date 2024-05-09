@@ -1,0 +1,4 @@
+[project]
+name = "maaya"
+version = "0.1.0"
+description = "Physics engine"

@@ -1,6 +1,6 @@
 # maaya/__init__.py
 
-from .core import Vector3D, Quaternion, Body, World
+from .core import Vector3D, Quaternion, Body, World, GravitationalForce
 from .utils import Renderer
 
 # from .core.forces import GravityForce, SpringForce, DragForce
@@ -9,8 +9,9 @@ from .utils import Renderer
 __all__ = [
     'Vector3D', 'Quaternion',
     'Body',
+    'GravitationalForce'
     # 'GravityForce', 'SpringForce', 'DragForce',
     # 'EulerIntegrator', 'RungeKuttaIntegrator',
-    'World'
+    'World',
     'Renderer'
 ]

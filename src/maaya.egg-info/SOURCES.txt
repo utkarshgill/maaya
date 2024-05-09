@@ -1,0 +1,17 @@
+README.md
+pyproject.toml
+src/__init__.py
+src/test.py
+src/core/__init__.py
+src/core/world.py
+src/core/bodies/__init__.py
+src/core/bodies/body.py
+src/core/math/__init__.py
+src/core/math/quaternion.py
+src/core/math/vector3d.py
+src/maaya.egg-info/PKG-INFO
+src/maaya.egg-info/SOURCES.txt
+src/maaya.egg-info/dependency_links.txt
+src/maaya.egg-info/top_level.txt
+src/utils/__init__.py
+src/utils/visualization.py

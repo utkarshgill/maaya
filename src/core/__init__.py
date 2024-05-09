@@ -3,5 +3,6 @@
 from .bodies import Body
 from .math import Vector3D, Quaternion
 from .world import World
+from .forces import GravitationalForce
 
-__all__ = ['Vector3D', 'Quaternion', 'Body', 'World']
+__all__ = ['Vector3D', 'Quaternion', 'Body', 'World', 'GravitationalForce']
