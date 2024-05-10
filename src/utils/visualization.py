@@ -12,6 +12,9 @@ class Renderer:
         self.ax.set_xlim([-10, 10])
         self.ax.set_ylim([-10, 10])
         self.ax.set_zlim([0, 20])
+        self.ax.set_xlabel('X Axis')
+        self.ax.set_ylabel('Y Axis')
+        self.ax.set_zlabel('Z Axis')
         self.quadcopter_lines = []
         for obj in self.world.objects:
             # Define lines for a quadcopter X model with front half red and back half black

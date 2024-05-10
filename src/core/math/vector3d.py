@@ -1,4 +1,5 @@
 import numpy as np
+from .quaternion import Quaternion
 
 class Vector3D:
     def __init__(self, x=0, y=0, z=0):

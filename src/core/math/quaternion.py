@@ -43,6 +43,37 @@ class Quaternion:
             [2*x*y + 2*z*w, 1 - 2*x*x - 2*z*z, 2*y*z - 2*x*w],
             [2*x*z - 2*y*w, 2*y*z + 2*x*w, 1 - 2*x*x - 2*y*y]
         ], dtype=float)
+    
+    @staticmethod
+    def from_axis_angle(axis, angle):
+        axis = axis / np.linalg.norm(axis)
+        sin_a = np.sin(angle / 2)
+        cos_a = np.cos(angle / 2)
+        
+        w = cos_a
+        x = axis[0] * sin_a
+        y = axis[1] * sin_a
+        z = axis[2] * sin_a
+        
+        return Quaternion(w, x, y, z)
+
+    @staticmethod
+    def from_euler(roll, pitch, yaw):
+    # Correcting the order of application to ZYX (yaw, pitch, roll) for proper aerospace sequence
+        cy = np.cos(yaw * 0.5)
+        sy = np.sin(yaw * 0.5)
+        cp = np.cos(pitch * 0.5)
+        sp = np.sin(pitch * 0.5)
+        cr = np.cos(roll * 0.5)
+        sr = np.sin(roll * 0.5)
+
+        w = cy * cp * cr + sy * sp * sr
+        x = cy * cp * sr - sy * sp * cr
+        y = sy * cp * sr + cy * sp * cr
+        z = sy * cp * cr - cy * sp * sr
+
+        return Quaternion(w, x, y, z)
+
 
     def __repr__(self):
         return f"Quaternion({self.q[0]}, {self.q[1]}, {self.q[2]}, {self.q[3]})"

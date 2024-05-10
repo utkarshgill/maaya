@@ -1,9 +1,11 @@
-from .src import Vector3D, Quaternion, Body, World, Renderer
+from .src import Vector3D, Quaternion, Body, World, NoiseGenerator, Renderer, GravitationalForce
 
 __all__ = [
     'Vector3D',
     'Quaternion',
     'Body',
     'World',
-    'Renderer'
+    'NoiseGenerator',
+    'Renderer',
+    'GravitationalForce'
 ]

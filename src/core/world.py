@@ -14,7 +14,7 @@ class NoiseGenerator:
 
 
 class World:
-    def __init__(self, gravity=GravitationalForce(), noise=NoiseGenerator()):
+    def __init__(self, gravity=None, noise=None):
         self.objects = []
         self.time = 0
         self.gravity = gravity
@@ -25,8 +25,8 @@ class World:
 
     def update(self, dt):
         for obj in self.objects:
-            self.gravity.apply_to(obj)  # apply gravity force
-            self.noise.apply_to(obj)
+            if self.gravity is not None: self.gravity.apply_to(obj)  # apply gravity force
+            if self.noise is not None: self.noise.apply_to(obj)
             obj.update(dt)
 
     def simulate(self, frames, render=False):
