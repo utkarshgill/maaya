@@ -58,13 +58,9 @@ class QuadCopter(Body):
     def update(self, dt):
         o = self.board.receive(108)
         print(o)
+         # Integrate rotation incrementally; assume no change in orientation for w
+        quad.orientation = Quaternion.from_euler(np.radians(o['angx']), np.radians(o['angy']), np.radians(o['heading']))
         
-        heading = Quaternion.from_axis_angle(np.array([0, 0, 1]), np.radians(o['heading']))
-        pitch = Quaternion.from_axis_angle(np.array([1, 0, 0]), np.radians(o['angx']))
-        roll = Quaternion.from_axis_angle(np.array([0, 1, 0]), np.radians(o['angy']))
-
-        # Combine rotations in correct order: yaw (heading), pitch, then roll
-        self.orientation = heading * pitch * roll
 
         super().update(dt)
 

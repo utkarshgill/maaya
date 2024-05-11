@@ -17,7 +17,7 @@ class Body:
         angular_acceleration = np.linalg.inv(self.inertia).dot(torque.v)  # Inertia matrix must be invertible
         angular_acceleration_quaternion = Quaternion(0, *angular_acceleration)
         self.angular_velocity += angular_acceleration_quaternion * dt
-        self.angular_velocity.normalize()  # Optional, depends on your handling of angular_velocity
+        self.angular_velocity.normalize() 
 
     def update(self, dt):
         # Update orientation using a more accurate quaternion integration approach
@@ -29,9 +29,6 @@ class Body:
         self.velocity += self.acceleration * dt
         self.position += self.velocity * dt
         self.acceleration = Vector3D()  # Reset acceleration if needed
-
-        # Normalize the orientation quaternion to prevent drift
-        self.orientation.normalize()
 
     def apply_force(self, force):
         # F = m * a, therefore a = F / m

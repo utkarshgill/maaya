@@ -36,32 +36,23 @@ class QuadCopter(Body):
 
     # PID stability loop
 
-    # def update(self, dt):
-    #     # Assuming self.position.v[2] is altitude, and self.orientation provides roll, pitch, and yaw directly
-    #     current_altitude = self.position.v[2]
-    #     current_roll, current_pitch, current_yaw = self.orientation.as_rotation_matrix()  # Adjust this method to your implementation
-    #     print(current_altitude, current_roll, current_pitch, current_yaw)
+    def update(self, dt):
+        # Assuming self.position.v[2] is altitude, and self.orientation provides roll, pitch, and yaw directly
         
-    #     # Create a control vector from sensor data
-    #     control_vector = np.array([current_altitude, current_roll, current_pitch, current_yaw])
-        
-    #     # Update the PID controller with this control vector
-    #     T, R, Y, P = self.ctrl.update(control_vector)
-    #     self.command([T, R, Y, P])
-    #     super().update(dt)
+        self.command([1, 0, 0, 0])
+        super().update(dt)
 
 
   
 
     def command(self, c):
-        T, R, Y, P = c
+        T, R, P, Y = c
 
-        rotation_matrix = self.orientation.as_rotation_matrix()
-        world_torque = rotation_matrix @ np.array([-P, -R, Y])
-        world_thrust = rotation_matrix @ np.array([0, 0, T])
-
-        self.apply_torque(Vector3D(*world_torque))
-        self.apply_force(Vector3D(*world_thrust))
+        # write logic to apply thrust downward realtive to the orientation of the quad
+        x, y, z = self.orientation.rotate(Vector3D(0, 0, T))
+        thrust_vector = Vector3D(x, y, z)
+        self.apply_torque(Vector3D(R, P, Y))
+        self.apply_force(thrust_vector)
 
     def __repr__(self):
         return (f"QuadCopter(position={self.position}, velocity={self.velocity}, "
@@ -108,25 +99,19 @@ class DroneController:
         yaw_output = self.yaw_pid.update(current_yaw)
 
         # Convert PID outputs to drone's command format (T, R, Y, P)
-        return [altitude_output, -roll_output, yaw_output, -pitch_output]
+        return [altitude_output, -roll_output,-pitch_output, yaw_output ]
 
 
 frames = 1000
-world = World()
+world = World(noise=NoiseGenerator(intensity=0))
 # z_ctrl = PIDController(10.0, 10.0, 5.0, setpoint=10.0, dt=0.01)
 ctrl = DroneController()
 
-quad = QuadCopter(position=Vector3D(0, 0, 10.0), mass=1.0, ctrl=ctrl)
+quad = QuadCopter(position=Vector3D(0, 0, 10.0), orientation=Quaternion(0, 0, 0, -1), mass=1.0)
 
 world.add_object(quad) 
 
 r = Renderer(world)
 r.run(frames)
 
-
-def main():
-    pass
-
-if __name__ == '__main__':
-    main()
 

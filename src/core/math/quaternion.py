@@ -1,5 +1,4 @@
 import numpy as np
-
 class Quaternion:
     def __init__(self, w=1.0, x=0.0, y=0.0, z=0.0):
         self.q = np.array([w, x, y, z], dtype=float)
@@ -43,6 +42,15 @@ class Quaternion:
             [2*x*y + 2*z*w, 1 - 2*x*x - 2*z*z, 2*y*z - 2*x*w],
             [2*x*z - 2*y*w, 2*y*z + 2*x*w, 1 - 2*x*x - 2*y*y]
         ], dtype=float)
+    
+    def rotate(self, vector):
+        """ Rotate a vector by the quaternion """
+        # Convert vector into a quaternion with zero scalar part
+        v_quat = Quaternion(0, vector.v[0], vector.v[1], vector.v[2])
+        # The rotated quaternion
+        rotated_quat = self * v_quat * self.conjugate()
+        # Convert quaternion back to vector
+        return rotated_quat.q[1], rotated_quat.q[2], rotated_quat.q[3]
     
     @staticmethod
     def from_axis_angle(axis, angle):
