@@ -107,7 +107,7 @@ world = World(noise=NoiseGenerator(intensity=0))
 # z_ctrl = PIDController(10.0, 10.0, 5.0, setpoint=10.0, dt=0.01)
 ctrl = DroneController()
 
-quad = QuadCopter(position=Vector3D(0, 0, 10.0), orientation=Quaternion(0, 0, 0, -1), mass=1.0)
+quad = QuadCopter(position=Vector3D(0, 0, 10.0), orientation=Quaternion(0, 0, 1, 0), mass=1.0)
 
 world.add_object(quad) 
 
