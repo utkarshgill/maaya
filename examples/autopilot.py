@@ -18,7 +18,7 @@ action_dim = 2
 max_episodes = 5000
 max_timesteps = 3000
 update_timestep = 4000
-log_interval = 20
+log_interval = 1
 hidden_dim = 32
 lr = 3e-4
 gamma = 0.99
@@ -32,30 +32,45 @@ entropy_coef = 0.01
 batch_size = 32
 
 class ActorCritic(nn.Module):
-    def __init__(self, state_dim, action_dim, hidden_dim):
+    def __init__(self, state_dim, action_dim, hidden_dim, dropout_rate=0.2):
         super(ActorCritic, self).__init__()
         # Actor network
         self.actor_fc1 = nn.Linear(state_dim, hidden_dim)
+        self.actor_ln1 = nn.LayerNorm(hidden_dim)
         self.actor_fc2 = nn.Linear(hidden_dim, hidden_dim)
+        self.actor_ln2 = nn.LayerNorm(hidden_dim)
         self.actor_out = nn.Linear(hidden_dim, action_dim)
+        self.actor_dropout = nn.Dropout(dropout_rate)
         
         # Critic network
         self.critic_fc1 = nn.Linear(state_dim, hidden_dim)
+        self.critic_ln1 = nn.LayerNorm(hidden_dim)
         self.critic_fc2 = nn.Linear(hidden_dim, hidden_dim)
+        self.critic_ln2 = nn.LayerNorm(hidden_dim)
         self.critic_out = nn.Linear(hidden_dim, 1)
+        self.critic_dropout = nn.Dropout(dropout_rate)
 
     def forward(self, state):
         # Actor network forward pass
-        x = F.relu(self.actor_fc1(state))
-        x = F.relu(self.actor_fc2(x))
+        x = F.relu(self.actor_ln1(self.actor_fc1(state)))
+        x = self.actor_dropout(x)
+        x = F.relu(self.actor_ln2(self.actor_fc2(x)))
+        x = self.actor_dropout(x)
         action_mean = torch.tanh(self.actor_out(x))  # Continuous action space
+
+        # Rescale action_mean to match the action space
+        action_mean_scaled = torch.clone(action_mean)  # Clone to avoid in-place modification
+        action_mean_scaled[:, 0] = action_mean[:, 0] * 25 + 25  # Scaling for throttle (0 to 50)
+        action_mean_scaled[:, 1] = action_mean[:, 1] * np.pi   # Scaling for steer angle (-π to π)
         
         # Critic network forward pass
-        v = F.relu(self.critic_fc1(state))
-        v = F.relu(self.critic_fc2(v))
+        v = F.relu(self.critic_ln1(self.critic_fc1(state)))
+        v = self.critic_dropout(v)
+        v = F.relu(self.critic_ln2(self.critic_fc2(v)))
+        v = self.critic_dropout(v)
         value = self.critic_out(v)
         
-        return action_mean, value
+        return action_mean_scaled, value
 
 class Memory:
     def __init__(self):
@@ -136,16 +151,18 @@ class PPO:
         with torch.no_grad():
             rewards = torch.tensor(memory.rewards, dtype=torch.float32)
             is_terms = torch.tensor(memory.is_terminals, dtype=torch.float32)
+            
             old_states = torch.cat(memory.states).detach()
             old_actions = torch.cat(memory.actions).detach()
             old_logprobs = torch.cat(memory.logprobs).detach()
             _, state_values = self.actor_critic(old_states)
             state_values = torch.squeeze(state_values)
+
+            rewards = (rewards - rewards.mean()) / (rewards.std() + 1e-8)
             advantages, returns = self.compute_advantages(rewards, state_values, is_terms)
         
         dataset = TensorDataset(old_states, old_actions, old_logprobs, advantages, returns)
         dataloader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
-        
         for _ in range(self.K_epochs):
             for batch in dataloader:
                 batch_states, batch_actions, batch_logprobs, batch_advantages, batch_returns = batch
@@ -173,9 +190,10 @@ class PPO:
                 # Total loss
                 loss = self.ppo_loss_coef * actor_loss + self.critic_loss_coef * critic_loss - self.entropy_coef * entropy_loss
 
-                # Backward pass and optimizer step
+                # Backward pass and optimizer step with gradient clipping
                 self.optimizer.zero_grad()
                 loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.actor_critic.parameters(), max_norm=0.5)
                 self.optimizer.step()
 
 def train(max_episodes, max_timesteps, update_timestep, log_interval, state_dim, action_dim, hidden_dim, lr, gamma, K_epochs, eps_clip, action_std, gae_lambda, ppo_loss_coef, critic_loss_coef, entropy_coef, batch_size):
@@ -190,10 +208,10 @@ def train(max_episodes, max_timesteps, update_timestep, log_interval, state_dim,
     plt.ion()
     fig, ax = plt.subplots()
     
+    # Initialize the environment once outside the loop
+    env = ContinuousPathfindingEnv(num_obstacles=0, render_mode='human')
+    
     for episode in range(1, max_episodes + 1):
-        render_mode = 'human' if episode % 200 == 0 else None
-
-        env = ContinuousPathfindingEnv(num_obstacles=15, render_mode=render_mode)
         state, _ = env.reset()
         total_reward = 0
         for t in range(max_timesteps):
@@ -244,9 +262,7 @@ class ContinuousPathfindingEnv(Env):
         # Initialize environment elements
         self.obstacles = self._generate_obstacles()
         self.start = self._generate_valid_point()
-        self.end = self._generate_valid_point()
-        while self.start == self.end:
-            self.end = self._generate_valid_point()
+        self.end = np.array([self.grid_size / 2, self.grid_size / 2])  # Set end point to the origin
 
         self.current_position = np.array(self.start)
         self.done = False
@@ -255,7 +271,7 @@ class ContinuousPathfindingEnv(Env):
         self.steps_taken = 0
 
         # Define action and observation spaces
-        self.action_space = Box(low=np.array([0.0, -np.pi]), high=np.array([1.0, np.pi]), dtype=np.float32)
+        self.action_space = Box(low=np.array([0.0, -np.pi]), high=np.array([50.0, np.pi]), dtype=np.float32)
         self.observation_space = Box(low=0.0, high=self.grid_size, shape=(4,), dtype=np.float32)
 
         self.positions = []
@@ -298,8 +314,6 @@ class ContinuousPathfindingEnv(Env):
         self.ax.legend()
         plt.draw()
 
-
-
     def _generate_random_point(self):
         return (random.uniform(0, self.grid_size), random.uniform(0, self.grid_size))
 
@@ -319,7 +333,7 @@ class ContinuousPathfindingEnv(Env):
                 return True
         return False
 
-    def _point_close_to_obstacles(self, point, threshold=20.0):
+    def _point_close_to_obstacles(self, point, threshold=50.0):
         for (lower_left, width, height) in self.obstacles:
             center = np.array([lower_left[0] + width / 2, lower_left[1] + height / 2])
             if np.linalg.norm(point - center) < threshold:
@@ -335,9 +349,7 @@ class ContinuousPathfindingEnv(Env):
     def reset(self):
         self.obstacles = self._generate_obstacles()
         self.start = self._generate_valid_point()
-        self.end = self._generate_valid_point()
-        while self.start == self.end:
-            self.end = self._generate_valid_point()
+        self.end = np.array([self.grid_size / 2, self.grid_size / 2])  # Set end point to the origin
         self.current_position = np.array(self.start)
         self.done = False
         self.trunc = False
@@ -350,7 +362,6 @@ class ContinuousPathfindingEnv(Env):
         state = np.concatenate((self.current_position, self.end))
         return state, {}
 
-  
     def step(self, action):
         if self.done or self.trunc:
             return np.concatenate((self.current_position, self.end)), 0.0, self.done, self.trunc, {}
@@ -389,23 +400,29 @@ class ContinuousPathfindingEnv(Env):
             self.trunc = True
 
     def _calculate_reward(self):
-        reward = -0.02  # Penalty for each time step
+        reward = 0 # Penalty for each time step
         distance_to_end = np.linalg.norm(self.current_position - self.end)
-        reward += 10 * (1 / (distance_to_end + 1))  # Reward for getting closer to the end point
+        previous_distance_to_end = np.linalg.norm(self.positions[-2] - self.end) if len(self.positions) > 1 else distance_to_end
+        
+        # Reward for moving closer to the end point
+        if distance_to_end < previous_distance_to_end:
+            reward += 1
+        else:
+            reward -= 1  # Penalty for moving away from the end point
 
-        if np.linalg.norm(self.current_position - self.end) < 20.0:
+        if distance_to_end < 20.0:
             reward += 100  # Large reward for reaching the end point
+
         if self._point_inside_obstacles(self.current_position):
             reward -= 100  # Large penalty for crashing into obstacles
         elif self._point_close_to_obstacles(self.current_position):
             reward -= 10  # Penalty for coming close to obstacles
 
-        # Add penalty for exiting environment boundaries
+        # Penalty for exiting environment boundaries
         if not (0 <= self.current_position[0] <= self.grid_size and 0 <= self.current_position[1] <= self.grid_size):
             reward -= 100  # Large penalty for exiting the boundaries
 
         return reward
-
 
     def _update_rendering(self, move):
         dx, dy = move

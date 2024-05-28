@@ -26,6 +26,28 @@ class Quaternion:
         else:
             raise TypeError("Multiplication is only defined for Quaternion objects and scalars.")
 
+    def to_euler(self):
+        w, x, y, z = self.q
+
+        # Roll (x-axis rotation)
+        sinr_cosp = 2 * (w * x + y * z)
+        cosr_cosp = 1 - 2 * (x * x + y * y)
+        roll = np.arctan2(sinr_cosp, cosr_cosp)
+
+        # Pitch (y-axis rotation)
+        sinp = 2 * (w * y - z * x)
+        if abs(sinp) >= 1:
+            pitch = np.sign(sinp) * np.pi / 2  # Use 90 degrees if out of range
+        else:
+            pitch = np.arctan2(sinp, np.sqrt(1 - sinp * sinp))
+
+        # Yaw (z-axis rotation)
+        siny_cosp = 2 * (w * z + x * y)
+        cosy_cosp = 1 - 2 * (y * y + z * z)
+        yaw = np.arctan2(siny_cosp, cosy_cosp)
+
+        return roll, pitch, yaw
+
 
     def conjugate(self):
         w, x, y, z = self.q
@@ -48,7 +70,7 @@ class Quaternion:
         # Convert vector into a quaternion with zero scalar part
         v_quat = Quaternion(0, vector.v[0], vector.v[1], vector.v[2])
         # The rotated quaternion
-        rotated_quat = self * v_quat * self.conjugate()
+        rotated_quat = self * v_quat * self.conjugate() 
         # Convert quaternion back to vector
         return rotated_quat.q[1], rotated_quat.q[2], rotated_quat.q[3]
     

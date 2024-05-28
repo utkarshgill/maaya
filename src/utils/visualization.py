@@ -23,7 +23,7 @@ class Renderer:
             # Define lines for a quadcopter X model with front half red and back half black
             lines = [[(-1, -1, 0), (0, 0, 0)], [(0, 0, 0), (1, 1, 0)],
                      [(1, -1, 0), (0, 0, 0)], [(0, 0, 0), (-1, 1, 0)]]
-            colors = ['k', 'r', 'r', 'k']  # Alternating colors for the arms
+            colors = ['r', 'k', 'k', 'r']  # Alternating colors for the arms
             line_collection = Line3DCollection(lines, colors=colors, linewidths=2)
             self.quadcopter_lines.append(self.ax.add_collection3d(line_collection))
 
@@ -32,12 +32,25 @@ class Renderer:
         for i, obj in enumerate(self.world.objects):
             position = obj.position.v
             orientation = obj.orientation.as_rotation_matrix()
-            # Update positions of line segments based on the object's position and orientation
-            lines = np.array([[(-1, -1, 0), (0, 0, 0)], [(0, 0, 0), (1, 1, 0)],
-                              [(1, -1, 0), (0, 0, 0)], [(0, 0, 0), (-1, 1, 0)]])
-            lines = np.dot(lines.reshape(-1, 3), orientation).reshape(-1, 2, 3)  # Rotate lines
-            lines += position  # Translate lines
-            self.quadcopter_lines[i].set_segments(lines)
+            
+            # Define the initial lines of the quadcopter in the local frame
+            lines = np.array([[[-1, -1, 0], [0, 0, 0]], [[0, 0, 0], [1, 1, 0]],
+                              [[1, -1, 0], [0, 0, 0]], [[0, 0, 0], [-1, 1, 0]]])
+            
+            # Rotate lines according to the orientation matrix
+            rotated_lines = []
+            for line in lines:
+                rotated_line = np.dot(line, orientation.T)
+                rotated_lines.append(rotated_line)
+            
+            rotated_lines = np.array(rotated_lines)
+            
+            # Translate lines to the position of the quadcopter
+            rotated_lines += position
+            
+            # Update the segments of the Line3DCollection
+            self.quadcopter_lines[i].set_segments(rotated_lines)
+        
         return self.quadcopter_lines
     
     def run(self, frames):

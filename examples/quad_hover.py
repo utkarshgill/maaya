@@ -38,8 +38,12 @@ class QuadCopter(Body):
 
     def update(self, dt):
         # Assuming self.position.v[2] is altitude, and self.orientation provides roll, pitch, and yaw directly
-        
-        self.command([1, 0, 0, 0])
+        r, p, y = self.orientation.to_euler()
+        h = self.position.v[2]
+
+        T, R, P, Y = self.ctrl.update([h, r, p, y])
+
+        self.command([T, R, P, Y])
         super().update(dt)
 
 
@@ -83,7 +87,7 @@ class PIDController:
 class DroneController:
     def __init__(self):
         # PID controllers for roll, pitch, yaw, and altitude
-        self.altitude_pid = PIDController(kp=1.2, ki=0.01, kd=0.5, setpoint=10.0)  # Altitude set to 10 meters
+        self.altitude_pid = PIDController(kp=1, ki=1, kd=2, setpoint=10.0)  # Altitude set to 10 meters
         self.roll_pid = PIDController(kp=1.0, ki=0.0, kd=0.1)
         self.pitch_pid = PIDController(kp=1.0, ki=0.0, kd=0.1)
         self.yaw_pid = PIDController(kp=1.0, ki=0.0, kd=0.1)
@@ -99,15 +103,15 @@ class DroneController:
         yaw_output = self.yaw_pid.update(current_yaw)
 
         # Convert PID outputs to drone's command format (T, R, Y, P)
-        return [altitude_output, -roll_output,-pitch_output, yaw_output ]
+        return [altitude_output, roll_output, pitch_output, yaw_output ]
 
 
 frames = 1000
-world = World(noise=NoiseGenerator(intensity=0))
+world = World(noise=NoiseGenerator(intensity=0.1), gravity=GravitationalForce())
 # z_ctrl = PIDController(10.0, 10.0, 5.0, setpoint=10.0, dt=0.01)
 ctrl = DroneController()
 
-quad = QuadCopter(position=Vector3D(0, 0, 10.0), orientation=Quaternion(0, 0, 1, 0), mass=1.0)
+quad = QuadCopter(position=Vector3D(0, 0, 10.0), mass=1.0, ctrl=ctrl)
 
 world.add_object(quad) 
 
