@@ -1,7 +1,15 @@
+# Interactive target entry needs threading
+import threading, sys
+
 import numpy as np
-import sys
-sys.path.insert(0, '/Users/engelbart/Desktop/stuff')
-from maaya import Vector3D, Quaternion, Body, World, Renderer, NoiseGenerator, GravitationalForce
+# Ensure project root and src are on PYTHONPATH regardless of where script is launched
+from pathlib import Path
+_ROOT = Path(__file__).resolve().parent.parent  # project root
+_SRC = _ROOT / 'src'
+for _p in (str(_SRC), str(_ROOT)):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+from maaya import Vector3D, Body, World, Renderer, NoiseGenerator, GravitationalForce
 
 class QuadCopter(Body):
     def __init__(self, position=None, velocity=None, acceleration=None, mass=1.0,
@@ -37,31 +45,32 @@ class QuadCopter(Body):
     # PID stability loop
 
     def update(self, dt):
-        # Assuming self.position.v[2] is altitude, and self.orientation provides roll, pitch, and yaw directly
+        # Position in world frame
+        x_pos, y_pos, z_pos = self.position.v
+        # Current attitude expressed as Euler angles
         r, p, y = self.orientation.to_euler()
-        h = self.position.v[2]
 
-        T, R, P, Y = self.ctrl.update([h, r, p, y])
+        # Pass full state to the controller (x, y, z, roll, pitch, yaw)
+        T, R, P, Y = self.ctrl.update(x_pos, y_pos, z_pos, r, p, y)
 
-        self.command([T, R, P, Y])
+        self.command([T, R, P, Y], dt)
         super().update(dt)
 
 
   
 
-    def command(self, c):
+    def command(self, c, dt):
         T, R, P, Y = c
 
-        # write logic to apply thrust downward realtive to the orientation of the quad
-        x, y, z = self.orientation.rotate(Vector3D(0, 0, T))
-        thrust_vector = Vector3D(x, y, z)
-        self.apply_torque(Vector3D(R, P, Y))
+        # Apply thrust in the body +Z axis, rotated to world frame
+        thrust_vector = self.orientation.rotate(Vector3D(0, 0, T))
+        self.apply_torque(Vector3D(R, P, Y), dt=dt)
         self.apply_force(thrust_vector)
 
     def __repr__(self):
         return (f"QuadCopter(position={self.position}, velocity={self.velocity}, "
                 f"acceleration={self.acceleration}, mass={self.mass}, "
-                f"orientation={self.orientation}, motor_speeds={self.motor_speeds})")
+                f"orientation={self.orientation})")
 
 class PIDController:
     def __init__(self, kp, ki, kd, setpoint=0.0, dt=0.01):
@@ -74,46 +83,106 @@ class PIDController:
         self.integral = 0
         
     def update(self, current_value):
+        """Compute PID output.
+
+        Parameters
+        ----------
+        current_value : float
+            The current measurement of the process variable.
+        setpoint : float | None, optional
+            If provided, overrides the controller's internal set-point for
+            this call. This allows outer-loop controllers to supply dynamic
+            setpoints without recreating the PID object each iteration.
+        """
+
+        # Support both the old signature (current_value) and the new
+        # signature (current_value, setpoint=...).
+        if isinstance(current_value, tuple) or isinstance(current_value, list):
+            # Backwards compatibility path when caller passes
+            # (current_value, setpoint)
+            # Detect call pattern PID.update(value, setpoint)
+            current_value, maybe_setpoint = current_value
+            setpoint = maybe_setpoint
+        else:
+            setpoint = None
+
+        if setpoint is not None:
+            self.setpoint = setpoint
+
         error = self.setpoint - current_value
-        
+
         self.integral += error * self.dt
         derivative = (error - self.previous_error) / self.dt
-        
+
         output = (self.kp * error) + (self.ki * self.integral) + (self.kd * derivative)
         self.previous_error = error
-        # print(error, output)
         return output
     
 class DroneController:
     def __init__(self):
         # PID controllers for roll, pitch, yaw, and altitude
-        self.altitude_pid = PIDController(kp=1, ki=1, kd=2, setpoint=10.0)  # Altitude set to 10 meters
-        self.roll_pid = PIDController(kp=1.0, ki=0.0, kd=0.1)
-        self.pitch_pid = PIDController(kp=1.0, ki=0.0, kd=0.1)
+        self.x_pid = PIDController(kp=0.2, ki=0.0, kd=0.3, setpoint=2.0)
+        self.y_pid = PIDController(kp=0.2, ki=0.0, kd=0.3, setpoint=2.0)
+        self.altitude_pid = PIDController(kp=1.5, ki=0.2, kd=3.0, setpoint=10.0)
+        # Inner‐loop attitude gains tuned for quick but damped response
+        self.roll_pid  = PIDController(kp=2.0, ki=0.0, kd=0.3)
+        self.pitch_pid = PIDController(kp=2.0, ki=0.0, kd=0.3)
         self.yaw_pid = PIDController(kp=1.0, ki=0.0, kd=0.1)
 
-    def update(self, sensors):
-        # Sensors should provide current altitude, roll, pitch, and yaw
-        current_altitude, current_roll, current_pitch, current_yaw = sensors
+    def update(self, x, y, z, roll, pitch, yaw):
+        # Outer‐loop PIDs
+        pitch_set =  np.clip(self.x_pid.update(x),  -0.3, 0.3)   # tilt forward/back
+        roll_set  =  np.clip(-self.y_pid.update(y), -0.3, 0.3)   # tilt left/right
+        # Gravity compensation: hover thrust baseline ≈ m·g (here m=1 kg).
+        gravity_ff = 9.8  # N
+        thrust     = gravity_ff + self.altitude_pid.update(z)
+        thrust     = float(np.clip(thrust, 0.0, 20.0))
+        # Inner‐loop: drive attitude PIDs toward those setpoints
+        roll_cmd  =  self.roll_pid.update((roll,  roll_set))
+        pitch_cmd =  self.pitch_pid.update((pitch, pitch_set))
+        yaw_cmd   =  self.yaw_pid.update(yaw)
 
-        # Update each PID controller
-        altitude_output = self.altitude_pid.update(current_altitude)
-        roll_output = self.roll_pid.update(current_roll)
-        pitch_output = self.pitch_pid.update(current_pitch)
-        yaw_output = self.yaw_pid.update(current_yaw)
+        # Constrain generated torques to reasonable bounds to prevent instability
+        roll_cmd  = float(np.clip(roll_cmd,  -0.5, 0.5))
+        pitch_cmd = float(np.clip(pitch_cmd, -0.5, 0.5))
+        yaw_cmd   = float(np.clip(yaw_cmd,   -0.3, 0.3))
+        return [thrust, roll_cmd, pitch_cmd, yaw_cmd]
 
-        # Convert PID outputs to drone's command format (T, R, Y, P)
-        return [altitude_output, roll_output, pitch_output, yaw_output ]
-
+    def set_xy_target(self, x_target, y_target):
+        """Dynamically update horizontal position set‐points."""
+        self.x_pid.setpoint = x_target
+        self.y_pid.setpoint = y_target
 
 frames = 1000
-world = World(noise=NoiseGenerator(intensity=0.1), gravity=GravitationalForce())
+world = World(noise=NoiseGenerator(intensity=0.02), gravity=GravitationalForce())
 # z_ctrl = PIDController(10.0, 10.0, 5.0, setpoint=10.0, dt=0.01)
 ctrl = DroneController()
 
 quad = QuadCopter(position=Vector3D(0, 0, 10.0), mass=1.0, ctrl=ctrl)
 
-world.add_object(quad) 
+world.add_object(quad)
+
+# ---------------------------------------------------------------------------
+# Spawn a background thread that listens for "x y" pairs typed in the terminal
+# and updates the controller's horizontal targets on the fly.
+
+def _stdin_reader(ctrl_ref):
+    print("Type new x y set-points (e.g. '2.0 3.5') and press <Enter>.  Ctrl-D to stop input.")
+    for line in sys.stdin:
+        parts = line.strip().split()
+        if len(parts) != 2:
+            print("Please enter exactly two numbers separated by space.")
+            continue
+        try:
+            x_t, y_t = map(float, parts)
+        except ValueError:
+            print("Invalid input. Expect numeric values.")
+            continue
+        ctrl_ref.set_xy_target(x_t, y_t)
+        print(f"→ Updated targets: x={x_t:.2f}, y={y_t:.2f}")
+
+# Start reader BEFORE launching the blocking Matplotlib event loop
+threading.Thread(target=_stdin_reader, args=(ctrl,), daemon=True).start()
 
 r = Renderer(world)
 r.run(frames)

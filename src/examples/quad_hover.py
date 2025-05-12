@@ -3,7 +3,7 @@ import sys
 # Ensure the directory above 'src' is in the Python path
 sys.path.insert(0, '/Users/engelbart/Desktop/stuff')  
 
-from maaya import Vector3D, Body, World, Renderer
+from maaya import Vector3D, Body, World, Renderer, GravitationalForce
 
 class QuadCopter(Body):
     def __init__(self, position=None, velocity=None, acceleration=None, mass=1.0,
@@ -43,7 +43,9 @@ class QuadCopter(Body):
     def command(self, c):
         T, R, Y, P = c
         self.apply_torque(Vector3D(-P, -R, Y))
-        self.apply_force(Vector3D(0, 0, T))
+        # Rotate thrust vector into world frame using orientation
+        thrust_world = self.orientation.rotate(Vector3D(0, 0, T))
+        self.apply_force(thrust_world)
 
     def __repr__(self):
         return (f"QuadCopter(position={self.position}, velocity={self.velocity}, "
@@ -72,7 +74,7 @@ class PIDController:
         return output
 
 frames = 1000
-world = World(g=9.81)
+world = World(gravity=GravitationalForce(9.81))
 z_ctrl = PIDController(10.0, 10.0, 5.0, setpoint=10.0, dt=0.01)
 quad = QuadCopter(position=Vector3D(0, 0, 10.0), mass=1.0, ctrl=z_ctrl)
 

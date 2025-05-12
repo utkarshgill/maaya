@@ -26,6 +26,9 @@ class Quaternion:
         else:
             raise TypeError("Multiplication is only defined for Quaternion objects and scalars.")
 
+    def __rmul__(self, other):
+        return self.__mul__(other)
+
     def to_euler(self):
         w, x, y, z = self.q
 
@@ -66,13 +69,15 @@ class Quaternion:
         ], dtype=float)
     
     def rotate(self, vector):
-        """ Rotate a vector by the quaternion """
+        """Rotate a Vector3D by this quaternion and return a new Vector3D."""
+        from .vector3d import Vector3D  # Local import to avoid circular dependency
+
         # Convert vector into a quaternion with zero scalar part
         v_quat = Quaternion(0, vector.v[0], vector.v[1], vector.v[2])
-        # The rotated quaternion
-        rotated_quat = self * v_quat * self.conjugate() 
-        # Convert quaternion back to vector
-        return rotated_quat.q[1], rotated_quat.q[2], rotated_quat.q[3]
+        # Apply rotation
+        rotated_quat = self * v_quat * self.conjugate()
+        # Return rotated vector
+        return Vector3D(rotated_quat.q[1], rotated_quat.q[2], rotated_quat.q[3])
     
     @staticmethod
     def from_axis_angle(axis, angle):

@@ -15,7 +15,8 @@ class Vector3D:
         return Vector3D(*(self.v * scalar))
 
     def dot(self, other):
-        return Vector3D(*np.dot(self.v, other.v))
+        """Return scalar dot‐product between two vectors."""
+        return float(np.dot(self.v, other.v))
 
     def cross(self, other):
         return Vector3D(*np.cross(self.v, other.v))

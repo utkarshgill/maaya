@@ -9,26 +9,44 @@ class Body:
         self.acceleration = acceleration if acceleration is not None else Vector3D()
         self.mass = mass
         self.orientation = orientation if orientation is not None else Quaternion()
-        self.angular_velocity = angular_velocity if angular_velocity is not None else Quaternion()
+        # Angular velocity is stored as a pure 3-vector (rad/s)
+        self.angular_velocity = angular_velocity if angular_velocity is not None else Vector3D()
         self.inertia = inertia  # Placeholder for moment of inertia as a 3x3 matrix
 
     def apply_torque(self, torque, dt=0.01):
-        # Adjusting torque application to include inertia
-        angular_acceleration = np.linalg.inv(self.inertia).dot(torque.v)  # Inertia matrix must be invertible
-        angular_acceleration_quaternion = Quaternion(0, *angular_acceleration)
-        self.angular_velocity += angular_acceleration_quaternion * dt
-        self.angular_velocity.normalize() 
+        """Update angular velocity given a torque vector.
+
+        Parameters
+        ----------
+        torque : Vector3D
+            Torque expressed in the body frame (N·m).
+        dt : float, optional
+            Timestep size in seconds. Defaults to 0.01.
+        """
+        # α = I⁻¹ τ
+        angular_acceleration = np.linalg.inv(self.inertia).dot(torque.v)
+        # Integrate to update angular velocity (simple Euler)
+        self.angular_velocity += Vector3D(*angular_acceleration) * dt
 
     def update(self, dt):
-        # Update orientation using a more accurate quaternion integration approach
-        orientation_delta = self.angular_velocity * self.orientation * 0.5 * dt
-        self.orientation += orientation_delta
+        # --- Attitude integration -------------------------------------------------
+        # Convert angular velocity vector ω into quaternion form Ω = [0, ω] and
+        # integrate q̇ = ½ q ⊗ Ω (Euler step).
+        omega_quat = Quaternion(0, *self.angular_velocity.v)
+        # For ω expressed in the body frame the correct kinematic relation is q̇ = ½ q ⊗ Ω
+        orientation_derivative = self.orientation * omega_quat
+        self.orientation += orientation_derivative * (0.5 * dt)
         self.orientation.normalize()
+
+        # Simple angular damping (aerodynamic drag)
+        self.angular_velocity *= 0.98  # 2 % decay per 10 ms step
 
         # Update linear motion
         self.velocity += self.acceleration * dt
         self.position += self.velocity * dt
         self.acceleration = Vector3D()  # Reset acceleration if needed
+        # Linear drag
+        self.velocity *= 0.995
 
     def apply_force(self, force):
         # F = m * a, therefore a = F / m
