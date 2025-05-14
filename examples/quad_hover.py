@@ -12,7 +12,7 @@ for _p in (str(_SRC), str(_ROOT)):
 from maaya import Vector3D, Body, World, Renderer, GravitationalForce
 from maaya.sensor import IMUSensor
 from maaya.controller import Controller, PIDController
-from maaya.actuator import Mixer, Motor
+from maaya.actuator import GenericMixer, Motor
 
 class DroneController(Controller):
     def __init__(self):
@@ -30,16 +30,16 @@ class DroneController(Controller):
             x, y, z = body.position.v
             roll, pitch, yaw = body.orientation.to_euler()
             # Outer-loop PIDs with explicit setpoints
-            pitch_set = np.clip(self.x_pid.update(x, self.x_pid.setpoint), -0.3, 0.3)
-            roll_set = np.clip(-self.y_pid.update(y, self.y_pid.setpoint), -0.3, 0.3)
+            pitch_set = np.clip(self.x_pid.update(x, self.x_pid.setpoint, dt), -0.3, 0.3)
+            roll_set = np.clip(-self.y_pid.update(y, self.y_pid.setpoint, dt), -0.3, 0.3)
             # Gravity compensation: hover thrust baseline ≈ m·g (here m=1 kg).
             gravity_ff = 9.8  # N
-            thrust = gravity_ff + self.z_pid.update(z, self.z_pid.setpoint)
+            thrust = gravity_ff + self.z_pid.update(z, self.z_pid.setpoint, dt)
             thrust = float(np.clip(thrust, 0.0, 20.0))
             # Inner-loop: drive attitude PIDs toward those setpoints
-            roll_cmd = self.roll_pid.update(roll, roll_set)
-            pitch_cmd = self.pitch_pid.update(pitch, pitch_set)
-            yaw_cmd = self.yaw_pid.update(yaw, self.yaw_pid.setpoint)
+            roll_cmd = self.roll_pid.update(roll, roll_set, dt)
+            pitch_cmd = self.pitch_pid.update(pitch, pitch_set, dt)
+            yaw_cmd = self.yaw_pid.update(yaw, self.yaw_pid.setpoint, dt)
             # Constrain generated torques to reasonable bounds
             roll_cmd = float(np.clip(roll_cmd, -0.5, 0.5))
             pitch_cmd = float(np.clip(pitch_cmd, -0.5, 0.5))
@@ -82,7 +82,9 @@ quad.add_sensor(IMUSensor(accel_noise_std=0.02, gyro_noise_std=0.005))
 quad.add_controller(ctrl)
 
 # Register mixer and four motors with individual noise parameters
-quad.add_actuator(Mixer(arm_length=L, kT=1.0, kQ=0.02))
+motor_positions = [Vector3D( L, 0, 0), Vector3D(0,  L, 0), Vector3D(-L, 0, 0), Vector3D(0, -L, 0)]
+spins = [1, -1, 1, -1]
+quad.add_actuator(GenericMixer(motor_positions, spins, kT=1.0, kQ=0.02))
 
 # Motor positions in body frame (plus configuration)
 motor_configs = [

@@ -46,10 +46,13 @@ class Body:
         dt : float, optional
             Timestep size in seconds. Defaults to 0.01.
         """
-        # α = I⁻¹ τ
-        angular_acceleration = self.inertia_inv.dot(torque.v)
-        # Integrate to update angular velocity (simple Euler)
-        self.angular_velocity += Vector3D(*angular_acceleration) * dt
+        # Full rigid-body rotational equation:  I ω̇ + ω × (I ω) = τ
+        omega = self.angular_velocity.v
+        coriolis = np.cross(omega, self.inertia.dot(omega))
+        angular_accel = self.inertia_inv.dot(torque.v - coriolis)
+
+        # Integrate (Euler) over dt
+        self.angular_velocity += Vector3D(*angular_accel) * dt
 
     def update(self, dt):
         self.integrator.step(self, dt)

@@ -7,7 +7,7 @@ from .physics import GravitationalForce, EulerIntegrator, RungeKuttaIntegrator
 from .render import Renderer
 from .sensor import Sensor, IMUSensor
 from .controller import Controller, PIDController
-from .actuator import Actuator, SimpleThrustActuator, QuadrotorActuator, Mixer, Motor
+from .actuator import Actuator, SimpleThrustActuator, QuadrotorActuator, Mixer, GenericMixer, Motor
 from .scheduler import Scheduler
 
 # from .core.forces import GravityForce, SpringForce, DragForce
@@ -28,6 +28,7 @@ __all__ = [
     'SimpleThrustActuator',
     'QuadrotorActuator',
     'Mixer',
+    'GenericMixer',
     'Motor',
     'Scheduler'
 ]

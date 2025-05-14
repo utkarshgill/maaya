@@ -2,3 +2,9 @@
 name = "maaya"
 version = "0.1.0"
 description = "Physics engine"
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0",
+    "scipy>=1.10 ; extra == 'test'",  # only for reference validation
+]
