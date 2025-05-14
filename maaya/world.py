@@ -92,7 +92,10 @@ class World:
     def _control(self, dt: float):
         for body in self.bodies:
             for controller in getattr(body, 'controllers', []):
-                controller.update([body], dt)
+                # Allow controllers to return a control command; if provided, set it on the body
+                cmd = controller.update([body], dt)
+                if cmd is not None:
+                    body.control_command = cmd
 
     def _actuate(self, dt: float):
         for body in self.bodies:

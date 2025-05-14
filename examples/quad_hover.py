@@ -1,5 +1,5 @@
 # Interactive target entry needs threading
-import threading, sys
+import threading, sys, os
 
 import numpy as np
 # Ensure project root and src are on PYTHONPATH regardless of where script is launched
@@ -9,10 +9,19 @@ _SRC = _ROOT / 'src'
 for _p in (str(_SRC), str(_ROOT)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
-from maaya import Vector3D, Body, World, Renderer, GravitationalForce
+from maaya import Vector3D, Body
+from maaya.simulator import Simulator
+from maaya.ground import GroundCollision
+from maaya.physics import GravitationalForce
+from maaya.render import Renderer
 from maaya.sensor import IMUSensor
 from maaya.controller import Controller, PIDController
 from maaya.actuator import GenericMixer, Motor
+
+# Toggle rendering via environment variable: set RENDER=1 to enable
+RENDER = int(os.getenv('RENDER', '1'))
+# Toggle debug printing of integrate events: set DEBUG=1 to enable
+DEBUG = int(os.getenv('DEBUG', '0'))
 
 class DroneController(Controller):
     def __init__(self):
@@ -53,7 +62,6 @@ class DroneController(Controller):
         self.z_pid.setpoint = z_target
 
 frames = 1000
-world = World(gravity=GravitationalForce())
 ctrl = DroneController()
 L = 0.3
 # Extend Body to create a Quadcopter class
@@ -74,8 +82,18 @@ class Quadcopter(Body):
 # Instantiate the quadcopter
 quad = Quadcopter(position=Vector3D(0, 0, 10.0), mass=1.0, arm_length=0.3)
 
-# Register the quadcopter body with the world
-world.add_body(quad)
+# Instantiate the high-level simulator with gravity and ground collision
+sim = Simulator(
+    body=quad,
+    forces=[GravitationalForce(), GroundCollision(ground_level=0.0, restitution=0.5)]
+)
+
+if DEBUG:
+    # Subscribe to bus integrate events for logging
+    def on_integrate(msg):
+        pos = msg['body'].position.v
+        print(f"[t={msg['time']:.2f}] position = {pos}")
+    sim.bus.subscribe('integrate', on_integrate)
 
 # Register modular components: sensor, controller, actuator
 quad.add_sensor(IMUSensor(accel_noise_std=0.02, gyro_noise_std=0.005))
@@ -130,7 +148,14 @@ def _stdin_reader(ctrl_ref):
 if __name__ == "__main__":
     threading.Thread(target=_stdin_reader, args=(ctrl,), daemon=True).start()
 
-    r = Renderer(world)
-    r.run(frames)
+    # Run either with or without rendering
+    if RENDER:
+        # Monkey-patch world.update so Renderer uses sim.step (fires bus events)
+        sim.world.update = sim.step
+        r = Renderer(sim.world)
+        r.run(frames)
+    else:
+        # Pure simulation loop without graphics
+        sim.run(frames)
 
 
