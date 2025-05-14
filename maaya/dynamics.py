@@ -25,7 +25,7 @@ class EulerIntegrator:
         obj.velocity += obj.acceleration * dt
         obj.velocity *= self.linear_drag
         obj.position += obj.velocity * dt
-        obj.acceleration = Vector3D()  # Reset acceleration
+        # obj.acceleration = Vector3D()  # Reset acceleration (moved to World._sense)
 
 class RungeKuttaIntegrator:
     """Fourth-order Runge-Kutta integrator for Body state updates."""
@@ -64,7 +64,7 @@ class RungeKuttaIntegrator:
 
         obj.position = Vector3D(*new_pos)
         obj.velocity = Vector3D(*new_vel)
-        obj.acceleration = Vector3D()  # Reset acceleration
+        # obj.acceleration = Vector3D()  # Reset acceleration (moved to World._sense)
 
 # Rigid-body
 class Body:

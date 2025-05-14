@@ -4,6 +4,7 @@
 from collections import defaultdict
 from typing import Callable, List, Tuple
 import numpy as np
+from .math import Vector3D
 
 # --- Messaging bus ---
 class Bus:
@@ -95,6 +96,7 @@ class World:
         for body in self.bodies:
             for sensor in getattr(body, 'sensors', []):
                 sensor.read([body], dt)
+            body.acceleration = Vector3D()  # Reset acceleration after sensors read
 
     def _control(self, dt: float):
         for body in self.bodies:
