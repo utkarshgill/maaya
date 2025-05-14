@@ -7,6 +7,8 @@ from mpl_toolkits.mplot3d.art3d import Line3DCollection
 class Renderer:
     def __init__(self, world):
         self.world = world
+        # Enable interactive mode so plotting does not block
+        plt.ion()
         self.fig = plt.figure()
         self.ax = self.fig.add_subplot(111, projection='3d')
         self.ax.set_xlim([-10, 10])
@@ -55,6 +57,31 @@ class Renderer:
         return self.quadcopter_lines
     
     def run(self, frames):
-        anim = FuncAnimation(self.fig, self.update_func, frames=frames, init_func=lambda: self.quadcopter_lines,
-                             interval=10, blit=False)
-        plt.show()
+        # Non-blocking rendering: advance the simulation and update plot
+        for _ in range(frames):
+            self.update_func(None)
+        # Draw and process GUI events
+        plt.draw()
+        plt.pause(0.001)
+
+    def draw(self):
+        """Draw the current simulation state without advancing physics."""
+        import numpy as _np
+        for i, body in enumerate(self.world.bodies):
+            position = body.position.v
+            orientation = body.orientation.as_rotation_matrix()
+            # Define the initial lines of the quadcopter in the local frame
+            lines = _np.array([[[-1, -1, 0], [0, 0, 0]],
+                               [[0, 0, 0], [1, 1, 0]],
+                               [[1, -1, 0], [0, 0, 0]],
+                               [[0, 0, 0], [-1, 1, 0]]])
+            rotated_lines = []
+            for line in lines:
+                # Rotate then translate
+                rl = _np.dot(line, orientation.T) + position
+                rotated_lines.append(rl)
+            # Update the segments of the Line3DCollection
+            self.quadcopter_lines[i].set_segments(rotated_lines)
+        # Redraw
+        plt.draw()
+        plt.pause(0.001)

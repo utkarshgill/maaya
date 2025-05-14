@@ -130,4 +130,34 @@ class Simulator:
             })
         # Advance step counter and record state
         self.step_idx += 1
-        self._record_state() 
+        self._record_state()
+
+    @property
+    def state_spec(self):
+        """Return the specification of the simulation state."""
+        return {
+            'time': {'shape': (), 'dtype': float},
+            'position': {'shape': (3,), 'dtype': float},
+            'velocity': {'shape': (3,), 'dtype': float},
+            'orientation': {'shape': (4,), 'dtype': float},
+            'angular_velocity': {'shape': (3,), 'dtype': float},
+        }
+
+    def get_state(self):
+        """Return the current state as a dict and flat numpy vector."""
+        import numpy as np
+        s = {
+            'time': self.world.time,
+            'position': self.body.position.v.copy(),
+            'velocity': self.body.velocity.v.copy(),
+            'orientation': self.body.orientation.q.copy(),
+            'angular_velocity': self.body.angular_velocity.v.copy(),
+        }
+        flat = np.concatenate([
+            [s['time']],
+            s['position'],
+            s['velocity'],
+            s['orientation'],
+            s['angular_velocity']
+        ]).astype(np.float32)
+        return s, flat 

@@ -1,5 +1,6 @@
 """Simulation world orchestrating sense → control → actuate → integrate."""
 from .scheduler import Scheduler
+from .bus import Bus
 
 
 class World:
@@ -36,6 +37,7 @@ class World:
         self.time: float = 0.0
         self.dt: float = dt
         self.gravity = gravity
+        self.bus = Bus()
 
         # Merge user-supplied divisors with defaults
         self.divisors = {**World.DEFAULT_DIVISORS, **divisors}
@@ -43,6 +45,11 @@ class World:
         # Internal task scheduler
         self.scheduler = Scheduler()
         self._register_tasks()
+        # Subscribe default pipeline handlers to bus topics
+        self.bus.subscribe("sense", lambda data: self._sense(data["dt"]))
+        self.bus.subscribe("control", lambda data: self._control(data["dt"]))
+        self.bus.subscribe("actuate", lambda data: self._actuate(data["dt"]))
+        self.bus.subscribe("integrate", lambda data: self._integrate(data["dt"]))
 
     # ------------------------------------------------------------------
     # Public API
@@ -75,11 +82,11 @@ class World:
     # Task registration helpers
     # ------------------------------------------------------------------
     def _register_tasks(self):
-        # Capture dt via closure so lambdas stay zero-arg for Scheduler
-        self.scheduler.add(lambda: self._sense(self.dt), every=self.divisors['sense'])
-        self.scheduler.add(lambda: self._control(self.dt), every=self.divisors['control'])
-        self.scheduler.add(lambda: self._actuate(self.dt), every=self.divisors['actuate'])
-        self.scheduler.add(lambda: self._integrate(self.dt), every=self.divisors['integrate'])
+        # Publish stage events to the bus instead of calling handlers directly
+        self.scheduler.add(lambda: self.bus.publish("sense", {"dt": self.dt}), every=self.divisors['sense'])
+        self.scheduler.add(lambda: self.bus.publish("control", {"dt": self.dt}), every=self.divisors['control'])
+        self.scheduler.add(lambda: self.bus.publish("actuate", {"dt": self.dt}), every=self.divisors['actuate'])
+        self.scheduler.add(lambda: self.bus.publish("integrate", {"dt": self.dt}), every=self.divisors['integrate'])
 
     # ------------------------------------------------------------------
     # Task implementations
@@ -92,8 +99,7 @@ class World:
     def _control(self, dt: float):
         for body in self.bodies:
             for controller in getattr(body, 'controllers', []):
-                # Allow controllers to return a control command; if provided, set it on the body
-                cmd = controller.update([body], dt)
+                cmd = controller.update(body, dt)
                 if cmd is not None:
                     body.control_command = cmd
 

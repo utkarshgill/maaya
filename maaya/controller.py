@@ -1,48 +1,38 @@
 class Controller:
     """Base class for controllers."""
-    def update(self, objects, dt):
-        """Compute control commands for each object; to be implemented by subclasses."""
+    def update(self, body, dt):
+        """Compute and return a control command for the given body at this timestep."""
         raise NotImplementedError
 
 class PIDController(Controller):
-    def __init__(self, kp, ki, kd, setpoint=0.0, dt=0.01):
+    def __init__(self, kp, ki, kd, setpoint=0.0, dt=0.01, measurement_fn=None):
+        """
+        A simple PID controller that by default regulates altitude (z position).
+        Args:
+            kp, ki, kd: PID gains
+            setpoint: desired target value
+            dt: timestep for internal integral/derivative
+            measurement_fn: optional fn(body) -> float, to extract the current value
+        """
         self.kp = kp
         self.ki = ki
         self.kd = kd
         self.setpoint = setpoint
         self.dt = dt
-        self.previous_error = 0
-        self.integral = 0
-        
-    def update(self, current_value, setpoint, dt=None):
-        """Return PID command.
+        self.previous_error = 0.0
+        self.integral = 0.0
+        # default measurement is altitude (z position)
+        self.measurement_fn = (measurement_fn if measurement_fn is not None
+                               else (lambda body: body.position.v[2]))
 
-        Parameters
-        ----------
-        current_value : float
-            The measured process variable.
-        setpoint : float
-            Desired target value.
-        dt : float | None, optional
-            Timestep in **seconds** since last call.  If *None* the instance-
-            level ``self.dt`` fallback is used.  Supplying the runtime *dt*
-            makes the controller independent of the integrator step size and
-            avoids derivative kick when the simulation time step changes.
-        """
-
-        # Fall back to the stored dt to preserve backwards compatibility
-        dt = self.dt if dt is None else dt
-
-        error = setpoint - current_value
-
-        # Integral term (anti-windup could be added here)
+    def update(self, body, dt):
+        """Compute PID command given the body's state and return a scalar control command."""
+        # use provided dt for integration and derivative
+        error = self.setpoint - self.measurement_fn(body)
+        # integral term
         self.integral += error * dt
-
-        # Derivative term – first iteration uses stored previous_error (0)
-        derivative = (error - self.previous_error) / dt if dt > 0 else 0.0
-
-        # Update memory
+        # derivative term
+        derivative = ((error - self.previous_error) / dt) if dt > 0.0 else 0.0
         self.previous_error = error
-
         # PID output
         return self.kp * error + self.ki * self.integral + self.kd * derivative
