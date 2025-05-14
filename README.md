@@ -1,4 +1,4 @@
-# Māya
+# maaya
 Simple physics engine for simulating rigid body dynamics.
 
 ## Example
