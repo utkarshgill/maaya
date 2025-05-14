@@ -1,5 +1,6 @@
 import numpy as np
 from .math import Vector3D, Quaternion
+from .physics import EulerIntegrator
 
 class Body:
     def __init__(self, position=None, velocity=None, acceleration=None, mass=1.0,
@@ -29,24 +30,7 @@ class Body:
         self.angular_velocity += Vector3D(*angular_acceleration) * dt
 
     def update(self, dt):
-        # --- Attitude integration -------------------------------------------------
-        # Convert angular velocity vector ω into quaternion form Ω = [0, ω] and
-        # integrate q̇ = ½ q ⊗ Ω (Euler step).
-        omega_quat = Quaternion(0, *self.angular_velocity.v)
-        # For ω expressed in the body frame the correct kinematic relation is q̇ = ½ q ⊗ Ω
-        orientation_derivative = self.orientation * omega_quat
-        self.orientation += orientation_derivative * (0.5 * dt)
-        self.orientation.normalize()
-
-        # Simple angular damping (aerodynamic drag)
-        self.angular_velocity *= 0.98  # 2 % decay per 10 ms step
-
-        # Update linear motion
-        self.velocity += self.acceleration * dt
-        self.position += self.velocity * dt
-        self.acceleration = Vector3D()  # Reset acceleration if needed
-        # Linear drag
-        self.velocity *= 0.995
+        EulerIntegrator().step(self, dt)
 
     def apply_force(self, force):
         # F = m * a, therefore a = F / m

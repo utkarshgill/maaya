@@ -28,7 +28,8 @@ class Renderer:
             self.quadcopter_lines.append(self.ax.add_collection3d(line_collection))
 
     def update_func(self, frame):
-        self.world.update(0.01)  # update physics
+        # update physics with consistent timestep from world
+        self.world.update()
         for i, obj in enumerate(self.world.objects):
             position = obj.position.v
             orientation = obj.orientation.as_rotation_matrix()

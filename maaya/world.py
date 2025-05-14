@@ -1,35 +1,55 @@
-import numpy as np
 from .math import Vector3D
-from .forces import GravitationalForce
-
-class NoiseGenerator:
-    def __init__(self, intensity=0.1):
-        self.intensity = intensity
-
-    def apply_to(self, obj):
-        force_noise = Vector3D(*np.random.normal(0, self.intensity, size=3))
-        torque_noise = Vector3D(*np.random.normal(0, self.intensity, size=3))
-        obj.apply_force(force_noise)
-        obj.apply_torque(torque_noise)
-
 
 class World:
-    def __init__(self, gravity=None, noise=None):
+    def __init__(self, gravity=None, dt=0.01):
+        """Simulation world holding objects, physics components, and timestep."""
         self.objects = []
-        self.time = 0
+        self.time = 0.0
+        self.dt = dt
         self.gravity = gravity
-        self.noise = noise
+        self.sensors = []
+        self.controllers = []
+        self.actuators = []
 
     def add_object(self, obj):
         self.objects.append(obj)
 
-    def update(self, dt):
-        for obj in self.objects:
-            if self.gravity is not None: self.gravity.apply_to(obj)  # apply gravity force
-            if self.noise is not None: self.noise.apply_to(obj)
-            obj.update(dt)
+    def add_sensor(self, sensor):
+        self.sensors.append(sensor)
 
-    def simulate(self, frames, render=False):
+    def add_controller(self, controller):
+        self.controllers.append(controller)
+
+    def add_actuator(self, actuator):
+        self.actuators.append(actuator)
+
+    def update(self, dt=None):
+        """
+        Perform one simulation cycle: sense → control → actuate → integrate.
+        dt: timestep for this update (defaults to world.dt).
+        """
+        dt = self.dt if dt is None else dt
+        # 1. Sense
+        for sensor in self.sensors:
+            sensor.read(self.objects, dt)
+        # 2. Control
+        for controller in self.controllers:
+            controller.update(self.objects, dt)
+        # 3. Actuate (environment and actuators)
+        for obj in self.objects:
+            if self.gravity is not None:
+                self.gravity.apply_to(obj)
+            for actuator in self.actuators:
+                actuator.apply_to(obj, dt)
+        # 4. Integrate
+        for obj in self.objects:
+            obj.update(dt)
+        self.time += dt
+
+    def simulate(self, frames):
+        """
+        Run the simulation for a number of steps using the world timestep.
+        """
         for _ in range(frames):
-            self.update(0.01)
+            self.update()
 

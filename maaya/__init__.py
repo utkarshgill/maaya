@@ -2,9 +2,12 @@
 
 from .math import Vector3D, Quaternion
 from .body import Body
-from .world import World, NoiseGenerator
-from .forces import GravitationalForce
+from .world import World
+from .physics import GravitationalForce, EulerIntegrator, RungeKuttaIntegrator
 from .render import Renderer
+from .sensor import Sensor, IMUSensor
+from .controller import Controller, PIDController
+from .actuator import Actuator, SimpleThrustActuator, QuadrotorActuator
 
 # from .core.forces import GravityForce, SpringForce, DragForce
 # from .core.integrators import EulerIntegrator, RungeKuttaIntegrator
@@ -13,9 +16,14 @@ __all__ = [
     'Vector3D', 'Quaternion',
     'Body',
     'GravitationalForce',
-    'NoiseGenerator',
-    #   'DragForce',
-    # 'EulerIntegrator', 'RungeKuttaIntegrator',
+    'EulerIntegrator', 'RungeKuttaIntegrator',
     'World',
-    'Renderer'
+    'Renderer',
+    'Sensor',
+    'IMUSensor',
+    'Controller',
+    'PIDController',
+    'Actuator',
+    'SimpleThrustActuator',
+    'QuadrotorActuator'
 ]
