@@ -108,6 +108,7 @@ else:
             # Camera smoothing parameters
             self.smoothed_camera_yaw_deg = None
             self.camera_smoothing_factor = 0.15
+            self.smoothed_camera_target_pos = None
 
             # Arm visualization parameters
             self.arm_vis_length = 0.25 # Slightly increased for visibility
@@ -288,11 +289,20 @@ else:
                 # Offset camera yaw so that +X points forward in view
                 CAMERA_YAW_OFFSET = -90.0
                 effective_camera_yaw = ((self.smoothed_camera_yaw_deg + CAMERA_YAW_OFFSET + 180) % 360) - 180
+
+                # Smooth the camera target position (low-pass filter)
+                if self.smoothed_camera_target_pos is None:
+                    self.smoothed_camera_target_pos = np.array(target_pos_list)
+                else:
+                    diff_pos = np.array(target_pos_list) - self.smoothed_camera_target_pos
+                    self.smoothed_camera_target_pos += self.camera_smoothing_factor * diff_pos
+                smoothed_target_pos_list = self.smoothed_camera_target_pos.tolist()
+
                 self.p.resetDebugVisualizerCamera(
                     cameraDistance=TPP_CAMERA_DISTANCE,
                     cameraYaw=effective_camera_yaw,
                     cameraPitch=TPP_CAMERA_PITCH,
-                    cameraTargetPosition=target_pos_list
+                    cameraTargetPosition=smoothed_target_pos_list
                 )
             
             self.p.stepSimulation()

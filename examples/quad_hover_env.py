@@ -34,11 +34,11 @@ REPORT_ID = 0x01
 # -------------------------------------------------------------------------
 class DroneController(Controller):
     def __init__(self):
-        self.x_pid = PIDController(kp=0.2, ki=0.0, kd=0.3, setpoint=1.0,
+        self.x_pid = PIDController(kp=0.2, ki=0.0, kd=0.3, setpoint=0.0,
                                    measurement_fn=lambda b: b.position.v[0])
-        self.y_pid = PIDController(kp=0.2, ki=0.0, kd=0.3, setpoint=1.0,
+        self.y_pid = PIDController(kp=0.2, ki=0.0, kd=0.3, setpoint=0.0,
                                    measurement_fn=lambda b: b.position.v[1])
-        self.z_pid = PIDController(kp=1.5, ki=0.2, kd=3.0, setpoint=10.0,
+        self.z_pid = PIDController(kp=1.5, ki=0.2, kd=3.0, setpoint=1.0,
                                    measurement_fn=lambda b: b.position.v[2])
         self.roll_pid  = PIDController(kp=2.0, ki=0.0, kd=0.3,
                                       measurement_fn=lambda b: b.orientation.to_euler()[0])
@@ -98,7 +98,7 @@ class PS5AttitudeController(Controller):
         # Unpack sticks
         lx, ly, rx, ry = data[1], data[2], data[3], data[4]
         # Deadzone
-        def deadzone(val, dz=0.05):
+        def deadzone(val, dz=0.1):
             return val if abs(val) > dz else 0.0
 
         norm_lx = deadzone((lx - 127) / 127.0)
@@ -139,7 +139,7 @@ class Quadcopter(Body):
         I_x = num_arms * (1/3) * m_arm * (L_proj**2)
         I_y = I_x
         inertia = _np.array([[I_x,0,0],[0,I_y,0],[0,0,I_z]])
-        super().__init__(position=position or Vector3D(0,0,10.0),
+        super().__init__(position=position or Vector3D(0,0,1.0),
                          mass=mass, inertia=inertia)
         self.arm_length = arm_length
 
@@ -211,7 +211,7 @@ class QuadHoverEnv(gym.Env):
         self.quad.add_actuator(GenericMixer(motor_positions, spins, kT=1.0, kQ=0.02))
         for idx, (r, s) in enumerate(zip(motor_positions, spins)):
             self.quad.add_actuator(Motor(idx, r_body=r, spin=s,
-                                          thrust_noise_std=0.05, torque_noise_std=0.05))
+                                          thrust_noise_std=0.0, torque_noise_std=0.0))
         # Return initial observation
         obs, _ = self.sim.get_state()
         return obs, {}
