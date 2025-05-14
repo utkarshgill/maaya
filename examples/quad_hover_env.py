@@ -45,7 +45,8 @@ class DroneController(Controller):
         self.pitch_pid = PIDController(kp=2.0, ki=0.0, kd=0.3,
                                       measurement_fn=lambda b: b.orientation.to_euler()[1])
         self.yaw_pid   = PIDController(kp=1.0, ki=0.0, kd=0.1,
-                                      measurement_fn=lambda b: b.orientation.to_euler()[2])
+                                      measurement_fn=lambda b: b.orientation.to_euler()[2],
+                                      wrap=True)
 
     def update(self, body, dt):
         x, y, z = body.position.v
@@ -116,9 +117,8 @@ class PS5AttitudeController(Controller):
 
         # Yaw: integrate yaw rate (negative sign to correct direction)
         yaw_sp = self.ctrl.yaw_pid.setpoint - norm_lx * (np.pi/3) * dt  # slower yaw
-        self.ctrl.yaw_pid.setpoint = np.clip(yaw_sp, -np.pi, np.pi)
-        # After updating yaw_sp
-        self.ctrl.yaw_pid.setpoint = ((self.ctrl.yaw_pid.setpoint + np.pi) % (2 * np.pi)) - np.pi
+        # Wrap yaw setpoint continuously into [-pi, pi] for seamless rotation
+        self.ctrl.yaw_pid.setpoint = ((yaw_sp + np.pi) % (2 * np.pi)) - np.pi
 
         # Compute individual PID outputs
         thrust_cmd = np.clip(9.8 + self.ctrl.z_pid.update(body, dt), 0.0, 15.0)

@@ -177,7 +177,7 @@ class Controller:
 
 class PIDController(Controller):
     """Simple PID controller for altitude by default."""
-    def __init__(self, kp, ki, kd, setpoint=0.0, dt=0.01, measurement_fn=None):
+    def __init__(self, kp, ki, kd, setpoint=0.0, dt=0.01, measurement_fn=None, wrap=False):
         self.kp = kp
         self.ki = ki
         self.kd = kd
@@ -186,10 +186,14 @@ class PIDController(Controller):
         self.previous_error = 0.0
         self.integral = 0.0
         self.measurement_fn = (measurement_fn if measurement_fn is not None else lambda body: body.position.v[2])
+        self.wrap = wrap
 
     def update(self, body, dt):
         error = self.setpoint - self.measurement_fn(body)
+        # Wrap error for angular measurements to [-pi, pi]
+        if self.wrap:
+            error = (error + np.pi) % (2 * np.pi) - np.pi
         self.integral += error * dt
-        derivative = (error - self.previous_error)/dt if dt>0.0 else 0.0
+        derivative = (error - self.previous_error) / dt if dt > 0.0 else 0.0
         self.previous_error = error
-        return self.kp*error + self.ki*self.integral + self.kd*derivative 
+        return self.kp * error + self.ki * self.integral + self.kd * derivative 
