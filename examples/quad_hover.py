@@ -12,7 +12,7 @@ for _p in (str(_SRC), str(_ROOT)):
 from maaya import Vector3D, Body, World, Renderer, GravitationalForce
 from maaya.sensor import IMUSensor
 from maaya.controller import Controller
-from maaya.actuator import QuadrotorActuator
+from maaya.actuator import Mixer, Motor
 
 class PIDController:
     def __init__(self, kp, ki, kd, setpoint=0.0, dt=0.01):
@@ -99,7 +99,30 @@ world.add_object(quad)
 # Register modular components: sensor, controller, actuator
 world.add_sensor(IMUSensor(accel_noise_std=0.02, gyro_noise_std=0.005))
 world.add_controller(DroneControllerAdapter(ctrl))
-world.add_actuator(QuadrotorActuator())
+
+# Register mixer and four motors with individual noise parameters
+world.add_actuator(Mixer(arm_length=L, kT=1.0, kQ=0.02))
+
+# Motor positions in body frame (plus configuration)
+motor_configs = [
+    (0, Vector3D( L, 0, 0),  1),  # +X, spin CW (+1)
+    (1, Vector3D(0,  L, 0), -1),  # +Y, spin CCW (-1)
+    (2, Vector3D(-L, 0, 0),  1),  # -X
+    (3, Vector3D(0, -L, 0), -1)   # -Y
+]
+
+# Different noise specifications for each motor
+motor_noise_specs = [
+    {'thrust_noise_std': 0.01, 'torque_noise_std': 0.01},
+    {'thrust_noise_std': 0.01, 'torque_noise_std': 0.01},
+    {'thrust_noise_std': 0.01, 'torque_noise_std': 0.01},
+    {'thrust_noise_std': 0.01, 'torque_noise_std': 0.01},
+]
+
+for (idx, r_vec, spin), noise in zip(motor_configs, motor_noise_specs):
+    world.add_actuator(Motor(idx, r_body=r_vec, spin=spin,
+                              thrust_noise_std=noise['thrust_noise_std'],
+                              torque_noise_std=noise['torque_noise_std']))
 
 # ---------------------------------------------------------------------------
 # Spawn a background thread that listens for "x y" pairs typed in the terminal
