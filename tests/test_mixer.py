@@ -2,7 +2,7 @@
 
 import numpy as np
 from maaya.math import Vector3D
-from maaya.actuator import GenericMixer
+from maaya import GenericMixer
 
 
 class Dummy:

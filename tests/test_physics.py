@@ -8,8 +8,7 @@ if root_dir not in sys.path:
     sys.path.insert(0, root_dir)
 
 import numpy as np
-from maaya.physics import GravitationalForce, EulerIntegrator
-from maaya.body import Body
+from maaya import GravitationalForce, EulerIntegrator, Body
 from maaya.math import Vector3D
 from scipy.spatial.transform import Rotation as SciRot
 from scipy.integrate import solve_ivp
