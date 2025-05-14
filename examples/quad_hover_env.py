@@ -49,8 +49,6 @@ class DroneController(Controller):
                                       wrap=True)
 
     def update(self, body, dt):
-        x, y, z = body.position.v
-        roll, pitch, yaw = body.orientation.to_euler()
         pitch_set = np.clip(self.x_pid.update(body, dt), -0.3, 0.3)
         roll_set  = np.clip(-self.y_pid.update(body, dt), -0.3, 0.3)
         thrust = 9.8 + self.z_pid.update(body, dt)
@@ -139,7 +137,7 @@ class Quadcopter(Body):
         I_x = num_arms * (1/3) * m_arm * (L_proj**2)
         I_y = I_x
         inertia = _np.array([[I_x,0,0],[0,I_y,0],[0,0,I_z]])
-        super().__init__(position=position or Vector3D(0,0,1.0),
+        super().__init__(position=position or Vector3D(0,0,0.1),
                          mass=mass, inertia=inertia)
         self.arm_length = arm_length
 
@@ -157,29 +155,7 @@ class QuadHoverEnv(gym.Env):
         # Build DroneController and PS5-driven attitude controller
         self.ctrl = DroneController()
         self.att_ctrl = PS5AttitudeController(self.ctrl)
-        # Build quad and integrator
-        self.quad = Quadcopter()
-        self.quad.integrator = RungeKuttaIntegrator()
-        # Attach sensor directly to the quadcopter body
-        self.quad.add_sensor(IMUSensor(accel_noise_std=0.0, gyro_noise_std=0.0))
-
-        # Build world + simulator
-        self.sim = Simulator(
-            body=self.quad,
-            controllers=[self.att_ctrl],
-            actuators=[],
-            forces=[GravitationalForce(), GroundCollision(ground_level=0.0, restitution=0.5)],
-            dt=self.dt,
-        )
-
-        # Attach mixers & motors
-        L = self.quad.arm_length
-        motor_positions = [Vector3D(L,0,0), Vector3D(0,L,0), Vector3D(-L,0,0), Vector3D(0,-L,0)]
-        spins = [1, -1, 1, -1]
-        self.quad.add_actuator(GenericMixer(motor_positions, spins, kT=1.0, kQ=0.02))
-        for idx, (r, s) in enumerate(zip(motor_positions, spins)):
-            self.quad.add_actuator(Motor(idx, r_body=r, spin=s,
-                                          thrust_noise_std=0.0, torque_noise_std=0.0))
+        self._build_sim()
 
         # Define spaces
         spec = self.sim.state_spec
@@ -190,13 +166,11 @@ class QuadHoverEnv(gym.Env):
 
         self.renderer = None
 
-    def reset(self, *, seed=None, options=None):
-        super().reset(seed=seed)
-        # Re-build quad and simulator while preserving controller instance
-        # Create a fresh quad and integrator
+    def _build_sim(self):
+        # Reusable builder for quad, simulator, sensors, and actuators
         self.quad = Quadcopter()
         self.quad.integrator = RungeKuttaIntegrator()
-        # Create new Simulator using existing controller
+        self.quad.add_sensor(IMUSensor(accel_noise_std=0.0, gyro_noise_std=0.0))
         self.sim = Simulator(
             body=self.quad,
             controllers=[self.att_ctrl],
@@ -204,7 +178,6 @@ class QuadHoverEnv(gym.Env):
             forces=[GravitationalForce(), GroundCollision(ground_level=0.0, restitution=0.5)],
             dt=self.dt,
         )
-        # Re-attach mixers & motors
         L = self.quad.arm_length
         motor_positions = [Vector3D(L,0,0), Vector3D(0,L,0), Vector3D(-L,0,0), Vector3D(0,-L,0)]
         spins = [1, -1, 1, -1]
@@ -212,7 +185,10 @@ class QuadHoverEnv(gym.Env):
         for idx, (r, s) in enumerate(zip(motor_positions, spins)):
             self.quad.add_actuator(Motor(idx, r_body=r, spin=s,
                                           thrust_noise_std=0.0, torque_noise_std=0.0))
-        # Return initial observation
+
+    def reset(self, *, seed=None, options=None):
+        super().reset(seed=seed)
+        self._build_sim()
         obs, _ = self.sim.get_state()
         return obs, {}
 
@@ -241,7 +217,7 @@ class QuadHoverEnv(gym.Env):
 
 # -------------------------------------------------------------------------
 def _stdin_reader(ctrl_ref):
-    print("Type new x y z set-points (e.g. '1.0 1.0 10.0') and press <Enter>. Ctrl-D to stop input.")
+    print("Type new x y z set-points (e.g. '1.0 1.0 10.0')")
     for line in sys.stdin:
         parts = line.strip().split()
         if len(parts) != 3:
