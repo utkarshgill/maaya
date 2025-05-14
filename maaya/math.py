@@ -1,4 +1,38 @@
 import numpy as np
+
+class Vector3D:
+    def __init__(self, x=0, y=0, z=0):
+        self.v = np.array([x, y, z], dtype=float)
+
+    def __add__(self, other):
+        return Vector3D(*(self.v + other.v))
+
+    def __sub__(self, other):
+        return Vector3D(*(self.v - other.v))
+
+    def __mul__(self, scalar):
+        return Vector3D(*(self.v * scalar))
+
+    def dot(self, other):
+        """Return scalar dot‐product between two vectors."""
+        return float(np.dot(self.v, other.v))
+
+    def cross(self, other):
+        return Vector3D(*np.cross(self.v, other.v))
+
+    def magnitude(self):
+        return np.linalg.norm(self.v)
+
+    def apply_rotation(self, quaternion):
+        # Rotates this vector by the given quaternion
+        q_vector = Quaternion(0, *self.v)
+        q_rotated = quaternion * q_vector * quaternion.conjugate()
+        self.v = q_rotated.q[1:]
+
+    def __repr__(self):
+        return f"Vector3D({self.v[0]}, {self.v[1]}, {self.v[2]})"
+
+
 class Quaternion:
     def __init__(self, w=1.0, x=0.0, y=0.0, z=0.0):
         self.q = np.array([w, x, y, z], dtype=float)
@@ -51,7 +85,6 @@ class Quaternion:
 
         return roll, pitch, yaw
 
-
     def conjugate(self):
         w, x, y, z = self.q
         return Quaternion(w, -x, -y, -z)
@@ -67,34 +100,32 @@ class Quaternion:
             [2*x*y + 2*z*w, 1 - 2*x*x - 2*z*z, 2*y*z - 2*x*w],
             [2*x*z - 2*y*w, 2*y*z + 2*x*w, 1 - 2*x*x - 2*y*y]
         ], dtype=float)
-    
+
     def rotate(self, vector):
         """Rotate a Vector3D by this quaternion and return a new Vector3D."""
-        from .vector3d import Vector3D  # Local import to avoid circular dependency
-
         # Convert vector into a quaternion with zero scalar part
         v_quat = Quaternion(0, vector.v[0], vector.v[1], vector.v[2])
         # Apply rotation
         rotated_quat = self * v_quat * self.conjugate()
         # Return rotated vector
         return Vector3D(rotated_quat.q[1], rotated_quat.q[2], rotated_quat.q[3])
-    
+
     @staticmethod
     def from_axis_angle(axis, angle):
         axis = axis / np.linalg.norm(axis)
         sin_a = np.sin(angle / 2)
         cos_a = np.cos(angle / 2)
-        
+
         w = cos_a
         x = axis[0] * sin_a
         y = axis[1] * sin_a
         z = axis[2] * sin_a
-        
+
         return Quaternion(w, x, y, z)
 
     @staticmethod
     def from_euler(roll, pitch, yaw):
-    # Correcting the order of application to ZYX (yaw, pitch, roll) for proper aerospace sequence
+        # Correcting the order of application to ZYX (yaw, pitch, roll) for proper aerospace sequence
         cy = np.cos(yaw * 0.5)
         sy = np.sin(yaw * 0.5)
         cp = np.cos(pitch * 0.5)
@@ -109,7 +140,5 @@ class Quaternion:
 
         return Quaternion(w, x, y, z)
 
-
     def __repr__(self):
-        return f"Quaternion({self.q[0]}, {self.q[1]}, {self.q[2]}, {self.q[3]})"
-   
+        return f"Quaternion({self.q[0]}, {self.q[1]}, {self.q[2]}, {self.q[3]})" 

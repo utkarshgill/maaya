@@ -1,9 +1,9 @@
 import numpy as np
-from ..math import Vector3D, Quaternion
+from .math import Vector3D, Quaternion
 
 class Body:
     def __init__(self, position=None, velocity=None, acceleration=None, mass=1.0,
-                 orientation=None, angular_velocity=None, inertia = np.eye(3)):
+                 orientation=None, angular_velocity=None, inertia=np.eye(3)):
         self.position = position if position is not None else Vector3D()
         self.velocity = velocity if velocity is not None else Vector3D()
         self.acceleration = acceleration if acceleration is not None else Vector3D()
@@ -53,4 +53,4 @@ class Body:
         self.acceleration += Vector3D(*(force.v / self.mass))
 
     def __repr__(self):
-        return f"Body(position={self.position}, velocity={self.velocity}, acceleration={self.acceleration}, mass={self.mass})"
+        return f"Body(position={self.position}, velocity={self.velocity}, acceleration={self.acceleration}, mass={self.mass})" 
