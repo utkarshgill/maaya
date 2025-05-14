@@ -12,6 +12,10 @@ for _p in (str(_SRC), str(_ROOT)):
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
+try:
+    import hid  # provided by `pip install hidapi`
+except ImportError:
+    hid = None
 
 from maaya import (
     Vector3D, Body, Simulator,
@@ -19,6 +23,11 @@ from maaya import (
     IMUSensor, Controller, PIDController,
     GenericMixer, Motor, Renderer
 )
+
+# PS5 DualSense input constants
+VENDOR_ID = 0x054C
+PRODUCT_ID = 0x0CE6
+REPORT_ID = 0x01
 
 # -------------------------------------------------------------------------
 # Re-use DroneController and Quadcopter definitions from quad_hover.py
@@ -58,6 +67,67 @@ class DroneController(Controller):
         self.y_pid.setpoint = y_target
         self.z_pid.setpoint = z_target
 
+class PS5AttitudeController(Controller):
+    """
+    Reads PS5 DualSense sticks and drives DroneController's built-in PID loops for altitude and attitude.
+    Maintains stable hover and attitude hold, with sticks modifying target thrust and target orientation.
+    """
+    def __init__(self, drone_ctrl, thrust_gain=5.0, max_tilt_rad=0.5, yaw_rate_gain=np.pi/2):
+        self.ctrl = drone_ctrl
+        self.thrust_gain = thrust_gain
+        self.max_tilt = max_tilt_rad
+        self.yaw_rate_gain = yaw_rate_gain
+        if hid:
+            self.h = hid.device()
+            self.h.open(VENDOR_ID, PRODUCT_ID)
+            try:
+                self.h.set_nonblocking(True)
+            except AttributeError:
+                pass
+        else:
+            self.h = None
+
+    def update(self, body, dt):
+        # If HID unavailable, skip
+        if not self.h:
+            return None
+        data = self.h.read(64)
+        if not data or data[0] != REPORT_ID:
+            return None
+        # Unpack sticks
+        lx, ly, rx, ry = data[1], data[2], data[3], data[4]
+        # Deadzone
+        def deadzone(val, dz=0.05):
+            return val if abs(val) > dz else 0.0
+
+        norm_lx = deadzone((lx - 127) / 127.0)
+        norm_ly = deadzone((127 - ly) / 127.0)
+        norm_rx = deadzone((rx - 127) / 127.0)
+        norm_ry = deadzone((127 - ry) / 127.0)
+
+        # --- Altitude setpoint change (LY throttle) ---
+        z_sp = self.ctrl.z_pid.setpoint + norm_ly * self.thrust_gain * dt
+        self.ctrl.z_pid.setpoint = float(np.clip(z_sp, 0.0, 20.0))  # Lower max altitude
+
+        # --- Attitude setpoints directly to inner PIDs ---
+        max_tilt = 0.3  # radians (~17 deg)
+        self.ctrl.roll_pid.setpoint = np.clip(norm_rx * max_tilt, -max_tilt, max_tilt)
+        self.ctrl.pitch_pid.setpoint = np.clip(norm_ry * max_tilt, -max_tilt, max_tilt)
+
+        # Yaw: integrate yaw rate (negative sign to correct direction)
+        yaw_sp = self.ctrl.yaw_pid.setpoint - norm_lx * (np.pi/3) * dt  # slower yaw
+        self.ctrl.yaw_pid.setpoint = np.clip(yaw_sp, -np.pi, np.pi)
+        # After updating yaw_sp
+        self.ctrl.yaw_pid.setpoint = ((self.ctrl.yaw_pid.setpoint + np.pi) % (2 * np.pi)) - np.pi
+
+        # Compute individual PID outputs
+        thrust_cmd = np.clip(9.8 + self.ctrl.z_pid.update(body, dt), 0.0, 15.0)
+        roll_cmd = np.clip(self.ctrl.roll_pid.update(body, dt), -0.3, 0.3)
+        pitch_cmd = np.clip(self.ctrl.pitch_pid.update(body, dt), -0.3, 0.3)
+        yaw_cmd = np.clip(self.ctrl.yaw_pid.update(body, dt), -0.3, 0.3)
+
+        return [float(thrust_cmd), float(roll_cmd), float(pitch_cmd), float(yaw_cmd)]
+
 class Quadcopter(Body):
     def __init__(self, position=None, mass=1.0, arm_length=0.3):
         import numpy as _np
@@ -84,18 +154,19 @@ class QuadHoverEnv(gym.Env):
         self.dt = dt
         self.frame_skip = frame_skip
 
-        # Build controller
+        # Build DroneController and PS5-driven attitude controller
         self.ctrl = DroneController()
+        self.att_ctrl = PS5AttitudeController(self.ctrl)
         # Build quad and integrator
         self.quad = Quadcopter()
         self.quad.integrator = RungeKuttaIntegrator()
         # Attach sensor directly to the quadcopter body
-        self.quad.add_sensor(IMUSensor(accel_noise_std=0.02, gyro_noise_std=0.005))
+        self.quad.add_sensor(IMUSensor(accel_noise_std=0.0, gyro_noise_std=0.0))
 
         # Build world + simulator
         self.sim = Simulator(
             body=self.quad,
-            controllers=[self.ctrl],
+            controllers=[self.att_ctrl],
             actuators=[],
             forces=[GravitationalForce(), GroundCollision(ground_level=0.0, restitution=0.5)],
             dt=self.dt,
@@ -108,7 +179,7 @@ class QuadHoverEnv(gym.Env):
         self.quad.add_actuator(GenericMixer(motor_positions, spins, kT=1.0, kQ=0.02))
         for idx, (r, s) in enumerate(zip(motor_positions, spins)):
             self.quad.add_actuator(Motor(idx, r_body=r, spin=s,
-                                          thrust_noise_std=0.05, torque_noise_std=0.05))
+                                          thrust_noise_std=0.0, torque_noise_std=0.0))
 
         # Define spaces
         spec = self.sim.state_spec
@@ -128,7 +199,7 @@ class QuadHoverEnv(gym.Env):
         # Create new Simulator using existing controller
         self.sim = Simulator(
             body=self.quad,
-            controllers=[self.ctrl],
+            controllers=[self.att_ctrl],
             actuators=[],
             forces=[GravitationalForce(), GroundCollision(ground_level=0.0, restitution=0.5)],
             dt=self.dt,
@@ -192,8 +263,8 @@ if __name__ == '__main__':
     # Toggle debug printing via env var: set DEBUG=1 to enable
     DEBUG = int(os.getenv('DEBUG', '0'))
     env = QuadHoverEnv(render_mode=render_mode)
-    # Spawn background reader for dynamic target updates
-    threading.Thread(target=_stdin_reader, args=(env.ctrl,), daemon=True).start()
+    # PS5AttitudeController handles stick input directly, no stdin needed
+    # threading.Thread(target=_stdin_reader, args=(env.ctrl,), daemon=True).start()
     obs, info = env.reset()
     done = False
     while not done:
