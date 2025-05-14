@@ -33,34 +33,34 @@ class RungeKuttaIntegrator:
         self.angular_damp = angular_damp
         self.linear_drag = linear_drag
 
+    def _rk4_step(self, func, y0: np.ndarray, t0: float, dt: float) -> np.ndarray:
+        """
+        Perform a single 4th-order Runge-Kutta step for ODE y' = func(t, y).
+        """
+        k1 = func(t0, y0)
+        k2 = func(t0 + dt * 0.5, y0 + dt * k1 * 0.5)
+        k3 = func(t0 + dt * 0.5, y0 + dt * k2 * 0.5)
+        k4 = func(t0 + dt,       y0 + dt * k3)
+        return y0 + (dt / 6.0) * (k1 + 2*k2 + 2*k3 + k4)
+
     def step(self, obj, dt):
-        # Attitude (simple Euler)
+        # Attitude integration (first-order)
         omega_quat = Quaternion(0, *obj.angular_velocity.v)
         q_dot = obj.orientation * omega_quat
         obj.orientation += q_dot * (0.5 * dt)
         obj.orientation.normalize()
         obj.angular_velocity *= self.angular_damp
 
-        # Translational via RK4
-        pos0 = obj.position.v.copy()
-        vel0 = obj.velocity.v.copy()
-        acc  = obj.acceleration.v.copy()
+        # Translational integration via private RK4
+        state0 = np.concatenate([obj.position.v, obj.velocity.v])
+        def deriv(t, state):
+            vel = state[3:]
+            acc = obj.acceleration.v
+            return np.concatenate([vel, acc])
 
-        def f_pos(v): return v
-        def f_vel(): return acc
-
-        k1_pos = f_pos(vel0)
-        k1_vel = f_vel()
-        k2_pos = f_pos(vel0 + 0.5 * k1_vel * dt)
-        k2_vel = k1_vel
-        k3_pos = f_pos(vel0 + 0.5 * k2_vel * dt)
-        k3_vel = k1_vel
-        k4_pos = f_pos(vel0 + k3_vel * dt)
-        k4_vel = k1_vel
-
-        new_pos = pos0 + (dt/6.0) * (k1_pos + 2*k2_pos + 2*k3_pos + k4_pos)
-        new_vel = vel0 + (dt/6.0) * (k1_vel + 2*k2_vel + 2*k3_vel + k4_vel)
-        new_vel *= self.linear_drag
+        new_state = self._rk4_step(deriv, state0, 0.0, dt)
+        new_pos = new_state[:3]
+        new_vel = new_state[3:] * self.linear_drag
 
         obj.position = Vector3D(*new_pos)
         obj.velocity = Vector3D(*new_vel)
