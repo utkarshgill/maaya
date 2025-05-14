@@ -19,7 +19,7 @@ class Renderer:
 
         self.quadcopter_lines = []
 
-        for obj in self.world.objects:
+        for body in self.world.bodies:
             # Define lines for a quadcopter X model with front half red and back half black
             lines = [[(-1, -1, 0), (0, 0, 0)], [(0, 0, 0), (1, 1, 0)],
                      [(1, -1, 0), (0, 0, 0)], [(0, 0, 0), (-1, 1, 0)]]
@@ -30,9 +30,9 @@ class Renderer:
     def update_func(self, frame):
         # update physics with consistent timestep from world
         self.world.update()
-        for i, obj in enumerate(self.world.objects):
-            position = obj.position.v
-            orientation = obj.orientation.as_rotation_matrix()
+        for i, body in enumerate(self.world.bodies):
+            position = body.position.v
+            orientation = body.orientation.as_rotation_matrix()
             
             # Define the initial lines of the quadcopter in the local frame
             lines = np.array([[[-1, -1, 0], [0, 0, 0]], [[0, 0, 0], [1, 1, 0]],

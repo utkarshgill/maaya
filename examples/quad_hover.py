@@ -94,14 +94,15 @@ I_y = I_x
 inertia = np.array([[I_x, 0, 0], [0, I_y, 0], [0, 0, I_z]])
 quad = Body(position=Vector3D(0, 0, 10.0), mass=1.0, inertia=inertia)
 
-world.add_object(quad)
+# Register the quadcopter body with the world
+world.add_body(quad)
 
 # Register modular components: sensor, controller, actuator
-world.add_sensor(IMUSensor(accel_noise_std=0.02, gyro_noise_std=0.005))
-world.add_controller(DroneControllerAdapter(ctrl))
+quad.add_sensor(IMUSensor(accel_noise_std=0.02, gyro_noise_std=0.005))
+quad.add_controller(DroneControllerAdapter(ctrl))
 
 # Register mixer and four motors with individual noise parameters
-world.add_actuator(Mixer(arm_length=L, kT=1.0, kQ=0.02))
+quad.add_actuator(Mixer(arm_length=L, kT=1.0, kQ=0.02))
 
 # Motor positions in body frame (plus configuration)
 motor_configs = [
@@ -120,7 +121,7 @@ motor_noise_specs = [
 ]
 
 for (idx, r_vec, spin), noise in zip(motor_configs, motor_noise_specs):
-    world.add_actuator(Motor(idx, r_body=r_vec, spin=spin,
+    quad.add_actuator(Motor(idx, r_body=r_vec, spin=spin,
                               thrust_noise_std=noise['thrust_noise_std'],
                               torque_noise_std=noise['torque_noise_std']))
 
@@ -146,9 +147,10 @@ def _stdin_reader(ctrl_ref):
         print(f"→ Updated targets: x={x_t:.2f}, y={y_t:.2f}, z={z_t:.2f}")
 
 # Start reader BEFORE launching the blocking Matplotlib event loop
-threading.Thread(target=_stdin_reader, args=(ctrl,), daemon=True).start()
+if __name__ == "__main__":
+    threading.Thread(target=_stdin_reader, args=(ctrl,), daemon=True).start()
 
-r = Renderer(world)
-r.run(frames)
+    r = Renderer(world)
+    r.run(frames)
 
 

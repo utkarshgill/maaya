@@ -111,9 +111,11 @@ class Motor(Actuator):
         Reaction-torque coefficient (N·m per N thrust).
     thrust_noise_std : float, optional
     torque_noise_std : float, optional
+    tau : float, optional
+        First-order motor time constant (s). Defaults to 0.02.
     """
 
-    def __init__(self, idx, r_body, spin, kQ=0.02, thrust_noise_std=0.0, torque_noise_std=0.0):
+    def __init__(self, idx, r_body, spin, kQ=0.02, thrust_noise_std=0.0, torque_noise_std=0.0, tau=0.02):
         self.idx = idx
         self.r_body = r_body
         self.spin = spin
@@ -121,14 +123,22 @@ class Motor(Actuator):
         self.thrust_noise_std = thrust_noise_std
         self.torque_noise_std = torque_noise_std
 
+        # First-order lag parameters
+        self.tau = tau  # motor time constant (s)
+        self._thrust_state = 0.0  # internal filtered thrust
+
     def apply_to(self, obj, dt):
         thrusts = getattr(obj, 'motor_thrusts', None)
         if thrusts is None or self.idx >= len(thrusts):
             return  # mixer hasn't provided commands yet
 
-        thrust = thrusts[self.idx]
+        desired_thrust = thrusts[self.idx]
 
-        # Add thrust noise
+        # Motor first-order lag:  τ ẋ = (x_desired − x)
+        self._thrust_state += (desired_thrust - self._thrust_state) * (dt / self.tau)
+        thrust = self._thrust_state
+
+        # Add thrust noise after dynamics
         if self.thrust_noise_std > 0.0:
             thrust += np.random.randn() * self.thrust_noise_std
             thrust = max(0.0, thrust)

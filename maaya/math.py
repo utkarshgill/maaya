@@ -13,6 +13,31 @@ class Vector3D:
     def __mul__(self, scalar):
         return Vector3D(*(self.v * scalar))
 
+    def __rmul__(self, scalar):
+        return self.__mul__(scalar)
+
+    def __truediv__(self, scalar):
+        return Vector3D(*(self.v / scalar))
+
+    def __iadd__(self, other):
+        self.v += other.v
+        return self
+
+    def __isub__(self, other):
+        self.v -= other.v
+        return self
+
+    def __imul__(self, scalar):
+        self.v *= scalar
+        return self
+
+    def __itruediv__(self, scalar):
+        self.v /= scalar
+        return self
+
+    def __neg__(self):
+        return Vector3D(*(-self.v))
+
     def dot(self, other):
         """Return scalar dot‐product between two vectors."""
         return float(np.dot(self.v, other.v))

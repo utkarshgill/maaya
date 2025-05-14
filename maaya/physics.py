@@ -30,11 +30,10 @@ class EulerIntegrator:
 
         # Linear integration
         obj.velocity += obj.acceleration * dt
+        # Linear drag applies over the interval; damp velocity before position update
+        obj.velocity *= self.linear_drag
         obj.position += obj.velocity * dt
         obj.acceleration = Vector3D()  # Reset acceleration
-
-        # Linear drag
-        obj.velocity *= self.linear_drag
 
 
 class RungeKuttaIntegrator:
