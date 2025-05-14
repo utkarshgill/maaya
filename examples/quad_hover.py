@@ -16,10 +16,9 @@ from maaya.actuator import Mixer, Motor
 
 class DroneController(Controller):
     def __init__(self):
-        # PID controllers for roll, pitch, yaw, and altitude
         self.x_pid = PIDController(kp=0.2, ki=0.0, kd=0.3, setpoint=2.0)
         self.y_pid = PIDController(kp=0.2, ki=0.0, kd=0.3, setpoint=2.0)
-        self.altitude_pid = PIDController(kp=1.5, ki=0.2, kd=3.0, setpoint=10.0)
+        self.z_pid = PIDController(kp=1.5, ki=0.2, kd=3.0, setpoint=10.0)
         # Inner‐loop attitude gains tuned for quick but damped response
         self.roll_pid  = PIDController(kp=2.0, ki=0.0, kd=0.3)
         self.pitch_pid = PIDController(kp=2.0, ki=0.0, kd=0.3)
@@ -35,7 +34,7 @@ class DroneController(Controller):
             roll_set = np.clip(-self.y_pid.update(y, self.y_pid.setpoint), -0.3, 0.3)
             # Gravity compensation: hover thrust baseline ≈ m·g (here m=1 kg).
             gravity_ff = 9.8  # N
-            thrust = gravity_ff + self.altitude_pid.update(z, self.altitude_pid.setpoint)
+            thrust = gravity_ff + self.z_pid.update(z, self.z_pid.setpoint)
             thrust = float(np.clip(thrust, 0.0, 20.0))
             # Inner-loop: drive attitude PIDs toward those setpoints
             roll_cmd = self.roll_pid.update(roll, roll_set)
@@ -51,7 +50,7 @@ class DroneController(Controller):
         """Dynamically update horizontal position set‐points."""
         self.x_pid.setpoint = x_target
         self.y_pid.setpoint = y_target
-        self.altitude_pid.setpoint = z_target
+        self.z_pid.setpoint = z_target
 
 frames = 1000
 world = World(gravity=GravitationalForce())
