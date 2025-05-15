@@ -18,7 +18,7 @@ except ImportError:
     hid = None
 
 from maaya import (
-    Vector3D, Body, Simulator,
+    Vector3D, Body, Simulator, World, MultiForce,
     GravitationalForce, RungeKuttaIntegrator, GroundCollision,
     IMUSensor, Controller, PIDController,
     GenericMixer, Motor, Renderer
@@ -167,24 +167,39 @@ class QuadHoverEnv(gym.Env):
         self.renderer = None
 
     def _build_sim(self):
-        # Reusable builder for quad, simulator, sensors, and actuators
+        # 1. Create and configure the body (Quadcopter)
         self.quad = Quadcopter()
         self.quad.integrator = RungeKuttaIntegrator()
         self.quad.add_sensor(IMUSensor(accel_noise_std=0.0, gyro_noise_std=0.0))
-        self.sim = Simulator(
-            body=self.quad,
-            controllers=[self.att_ctrl],
-            actuators=[],
-            forces=[GravitationalForce(), GroundCollision(ground_level=0.0, restitution=0.5)],
-            dt=self.dt,
-        )
+        
+        # Add the PS5AttitudeController (which wraps DroneController) to the quad.
+        # self.att_ctrl is initialized in QuadHoverEnv.__init__ before _build_sim is called.
+        self.quad.add_controller(self.att_ctrl)
+
+        # Add actuators to the quad
         L = self.quad.arm_length
-        motor_positions = [Vector3D(L,0,0), Vector3D(0,L,0), Vector3D(-L,0,0), Vector3D(0,-L,0)]
+        motor_positions = [Vector3D(L, 0, 0), Vector3D(0, L, 0), Vector3D(-L, 0, 0), Vector3D(0, -L, 0)]
         spins = [1, -1, 1, -1]
         self.quad.add_actuator(GenericMixer(motor_positions, spins, kT=1.0, kQ=0.02))
         for idx, (r, s) in enumerate(zip(motor_positions, spins)):
             self.quad.add_actuator(Motor(idx, r_body=r, spin=s,
                                           thrust_noise_std=0.0, torque_noise_std=0.0))
+
+        # 2. Define forces for the world
+        world_forces = MultiForce([
+            GravitationalForce(), 
+            GroundCollision(ground_level=0.0, restitution=0.5)
+        ])
+
+        # 3. Create the World
+        # self.dt is available from QuadHoverEnv's constructor.
+        sim_world = World(gravity=world_forces, dt=self.dt)
+
+        # 4. Add the configured body to the world
+        sim_world.add_body(self.quad)
+
+        # 5. Create the Simulator with the configured world
+        self.sim = Simulator(world=sim_world)
 
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)

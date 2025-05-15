@@ -129,30 +129,16 @@ class MultiForce:
 
 class Simulator:
     """High-level API wrapping World for easy simulation and logging."""
-    def __init__(
-        self,
-        body,
-        sensors=None,
-        controllers=None,
-        actuators=None,
-        forces=None,
-        dt=0.01,
-        rates=None,
-    ):
-        divisors = rates or {}
-        gravity = None
-        if forces:
-            from .engine import MultiForce
-            gravity = forces[0] if len(forces)==1 else MultiForce(forces)
-        self.world = World(gravity=gravity, dt=dt, **divisors)
-        self.body = body
-        self.world.add_body(body)
-        for sensor in sensors or []:
-            body.add_sensor(sensor)
-        for ctrl in controllers or []:
-            body.add_controller(ctrl)
-        for act in actuators or []:
-            body.add_actuator(act)
+    def __init__(self, world: World):
+        if not isinstance(world, World):
+            raise TypeError("Simulator must be initialized with a World instance.")
+        self.world = world
+
+        if not self.world.bodies:
+            raise ValueError("The provided World must contain at least one body for the Simulator.")
+        
+        self.body = self.world.bodies[0] 
+
         self.logs = []
         self.bus = Bus()
         self.step_idx = 0
