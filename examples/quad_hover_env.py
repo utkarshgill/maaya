@@ -17,9 +17,28 @@ from maaya import (
     Vector3D, Quaternion, Body, Simulator, World, MultiForce,
     GravitationalForce, RungeKuttaIntegrator, GroundCollision,
     IMUSensor, # Controller and PIDController are now in firmware
-    GenericMixer, Motor, Renderer
+    GenericMixer, Motor, Renderer, Actuator
 )
 from firmware.targets import get_target # Import for the new controller
+
+# Grasp actuator for picking up and carrying a box
+class GraspActuator(Actuator):
+    """Attaches a box rigidly to the quad at a fixed offset."""
+    def __init__(self, box, offset=Vector3D(0, 0, -0.1)):
+        self.box = box
+        self.offset = offset
+
+    def apply_to(self, obj, dt):
+        # place box at relative offset in body frame for rigid attachment
+        world_offset = obj.orientation.rotate(self.offset)
+        self.box.position = obj.position + world_offset
+        self.box.velocity = obj.velocity
+        # match quad's orientation and angular velocity (rigid attachment)
+        self.box.orientation = obj.orientation
+        self.box.angular_velocity = obj.angular_velocity
+        # disable gravity for carried box
+        self.box.mass = self.box.mass  # keep mass
+        # no actuators or controllers on box while carried
 
 class Quadcopter(Body):
     def __init__(self, position=None, mass=1.0, arm_length=0.3):
@@ -46,6 +65,8 @@ class QuadHoverEnv(gym.Env):
         self.dt = dt
         self.frame_skip = frame_skip
         self.config = config
+        self.carrying_box = None
+        self.pickup_radius = 0.75  # slightly increased grasping distance for easier pickup
 
         # Build controller using the firmware target system
         target_cfg = get_target("sim_dualsense")
@@ -68,9 +89,10 @@ class QuadHoverEnv(gym.Env):
 
     def _build_sim(self):
         # 1. Create and configure the body (Quadcopter)
-        self.quad = Quadcopter()
+        self.quad = Quadcopter(position=Vector3D(0, 0, 0.1))
         self.quad.integrator = RungeKuttaIntegrator()
         self.quad.add_sensor(IMUSensor(accel_noise_std=0.0, gyro_noise_std=0.0))
+        self.quad.urdf_filename = "quadrotor.urdf" # Explicitly assign URDF for the quad
         
         # Add the PS5AttitudeController (which wraps DroneController) to the quad.
         # self.att_ctrl is initialized in QuadHoverEnv.__init__ before _build_sim is called.
@@ -114,6 +136,20 @@ class QuadHoverEnv(gym.Env):
 
         # 5. Create the Simulator with the configured world
         self.sim = Simulator(world=sim_world)
+
+        # Spawn pickable boxes in the world
+        self.boxes = []
+        BOX_HALF_HEIGHT = 0.25  # For cube.urdf which is 0.5x0.5x0.5
+        # Keep boxes in loading area (at x=6.0 and 10.0 for wider separation)
+        for x_coord in [6.0, 10.0]:
+            pos = Vector3D(x_coord, 0, BOX_HALF_HEIGHT)
+            box = Body(position=pos, mass=0.5, inertia=np.eye(3)*0.01)
+            # mark URDF for rendering
+            box.urdf_filename = 'cube.urdf'
+            # store half-height so ground collision places COM correctly
+            box.half_height = BOX_HALF_HEIGHT
+            self.boxes.append(box)
+            sim_world.add_body(box)
 
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)
@@ -174,6 +210,19 @@ class QuadHoverEnv(gym.Env):
                     self.att_ctrl.key_state['up'] = down
                 if code == self.renderer.p.B3G_DOWN_ARROW:
                     self.att_ctrl.key_state['down'] = down
+                # Pickup/drop with X or Spacebar
+                if (code in (ord('x'), ord('X')) or code == ord(' ')) and down:
+                    self._handle_pick_drop()
+                    continue
+        # DualSense Cross button mapping (pickup/drop)
+        if hasattr(self.att_ctrl, 'cross_pressed'):
+            # Trigger pickup on cross button down event
+            if self.att_ctrl.cross_pressed and not getattr(self.att_ctrl, 'cross_handled', False):
+                self._handle_pick_drop()
+                self.att_ctrl.cross_handled = True
+            # Reset handled flag when button is released
+            elif not self.att_ctrl.cross_pressed:
+                self.att_ctrl.cross_handled = False
         # Draw current state (PyBullet draw advances simulation internally)
         self.renderer.draw()
 
@@ -200,6 +249,31 @@ class QuadHoverEnv(gym.Env):
         """Handle key release events for keyboard fallback control."""
         key = event.key
         self.att_ctrl.key_state[key] = False
+
+    def _handle_pick_drop(self):
+        """Pick up or drop a box when pressing X."""
+        if self.carrying_box is None:
+            # try to pick up any nearby box
+            for box in self.boxes:
+                if (self.quad.position - box.position).magnitude() < self.pickup_radius:
+                    # compute offset so box hangs below quad without overlap
+                    # offset_z = -(box half-height + small margin)
+                    margin = 0.1
+                    offset_z = -(box.half_height + margin)
+                    actuator = GraspActuator(box, offset=Vector3D(0, 0, offset_z))
+                    self.quad.add_actuator(actuator)
+                    self.carrying_box = (box, actuator)
+                    print("Picked up box")
+                    break
+        else:
+            # drop current box
+            box, actuator = self.carrying_box
+            if actuator in self.quad.actuators:
+                self.quad.actuators.remove(actuator)
+            # detach box orientation so it no longer rotates with the quad after drop
+            box.angular_velocity = Vector3D(0, 0, 0)
+            self.carrying_box = None
+            print("Dropped box")
 
 def _stdin_reader(ctrl_ref):
     print("\n\n--- Background command listener started ---")

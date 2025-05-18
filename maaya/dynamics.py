@@ -136,9 +136,12 @@ class GroundCollision:
         self.restitution = restitution
 
     def apply_to(self, body):
+        # Account for object's half-height if provided
+        half_h = getattr(body, 'half_height', 0.0)
+        min_z = self.ground_level + half_h
         z = body.position.v[2]
-        if z < self.ground_level:
-            body.position.v[2] = self.ground_level
+        if z < min_z:
+            body.position.v[2] = min_z
             vz = body.velocity.v[2]
             if vz < 0:
                 body.velocity.v[2] = -vz * self.restitution 

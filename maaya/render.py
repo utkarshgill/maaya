@@ -1,110 +1,6 @@
 import numpy as np
 
-class MatplotlibRenderer:
-    def __init__(self, world, config='X'):
-        self.world = world
-        self.config = config.upper()
-        # Enable interactive mode so plotting does not block
-        plt.ion()
-        self.fig = plt.figure()
-        self.ax = self.fig.add_subplot(111, projection='3d')
-        self.ax.set_xlim([-10, 10])
-        self.ax.set_ylim([-10, 10])
-        self.ax.set_zlim([0, 20])
-        
-        self.ax.set_xlabel('X Axis')
-        self.ax.set_ylabel('Y Axis')
-        self.ax.set_zlabel('Z Axis')
-
-        self.quadcopter_lines = []
-
-        for body in self.world.bodies:
-            # Define lines based on configuration
-            if self.config == 'X':
-                local_lines = [[(-1, -1, 0), (0, 0, 0)],
-                               [(0, 0, 0), (1, 1, 0)],
-                               [(1, -1, 0), (0, 0, 0)],
-                               [(0, 0, 0), (-1, 1, 0)]]
-                colors = ['r', 'k', 'k', 'r']
-            else:
-                local_lines = [[(0, 1, 0), (0, 0, 0)],
-                               [(0, 0, 0), (0, -1, 0)],
-                               [(1, 0, 0), (0, 0, 0)],
-                               [(0, 0, 0), (-1, 0, 0)]]
-                colors = ['r', 'r', 'k', 'k']
-            line_collection = Line3DCollection(local_lines, colors=colors, linewidths=2)
-            self.quadcopter_lines.append(self.ax.add_collection3d(line_collection))
-
-    def update_func(self, frame):
-        # update physics with consistent timestep from world
-        self.world.update()
-        for i, body in enumerate(self.world.bodies):
-            position = body.position.v
-            orientation = body.orientation.as_rotation_matrix()
-            
-            # Define the initial lines of the quadcopter in the local frame
-            if self.config == 'X':
-                lines = np.array([[[-1, -1, 0], [0, 0, 0]],
-                                   [[0, 0, 0], [1, 1, 0]],
-                                   [[1, -1, 0], [0, 0, 0]],
-                                   [[0, 0, 0], [-1, 1, 0]]])
-            else:
-                lines = np.array([[[0, 1, 0], [0, 0, 0]],
-                                   [[0, 0, 0], [0, -1, 0]],
-                                   [[1, 0, 0], [0, 0, 0]],
-                                   [[0, 0, 0], [-1, 0, 0]]])
-            
-            # Rotate lines according to the orientation matrix
-            rotated_lines = []
-            for line in lines:
-                rotated_line = np.dot(line, orientation.T)
-                rotated_lines.append(rotated_line)
-            
-            rotated_lines = np.array(rotated_lines)
-            
-            # Translate lines to the position of the quadcopter
-            rotated_lines += position
-            
-            # Update the segments of the Line3DCollection
-            self.quadcopter_lines[i].set_segments(rotated_lines)
-        
-        return self.quadcopter_lines
-    
-    def run(self, frames):
-        # Non-blocking rendering: advance the simulation and update plot
-        for _ in range(frames):
-            self.update_func(None)
-        # Draw and process GUI events
-        plt.draw()
-        plt.pause(0.001)
-
-    def draw(self):
-        """Draw the current simulation state without advancing physics."""
-        import numpy as _np
-        for i, body in enumerate(self.world.bodies):
-            position = body.position.v
-            orientation = body.orientation.as_rotation_matrix()
-            # Define the initial lines of the quadcopter in the local frame
-            if self.config == 'X':
-                lines = _np.array([[[-1, -1, 0], [0, 0, 0]],
-                                   [[0, 0, 0], [1, 1, 0]],
-                                   [[1, -1, 0], [0, 0, 0]],
-                                   [[0, 0, 0], [-1, 1, 0]]])
-            else:
-                lines = _np.array([[[0, 1, 0], [0, 0, 0]],
-                                   [[0, 0, 0], [0, -1, 0]],
-                                   [[1, 0, 0], [0, 0, 0]],
-                                   [[0, 0, 0], [-1, 0, 0]]])
-            rotated_lines = []
-            for line in lines:
-                # Rotate then translate
-                rl = _np.dot(line, orientation.T) + position
-                rotated_lines.append(rl)
-            # Update the segments of the Line3DCollection
-            self.quadcopter_lines[i].set_segments(rotated_lines)
-        # Redraw
-        plt.draw()
-        plt.pause(0.001)
+# Only PyBulletRenderer is supported now; MatplotlibRenderer removed
 
 # Add PyBullet based renderer and make it default
 try:
@@ -180,6 +76,24 @@ else:
             try:
                 self.plane_id = p.loadURDF("plane.urdf")
                 print("DEBUG: plane.urdf loaded successfully.")
+                # Create pastel rectangular takeoff, loading, and delivery pads
+                pad_half_extents = [3.0, 2.0, 0.01]  # 6m x 4m rectangular pads
+                pads = {
+                    'takeoff': ([0.0, 0.0, pad_half_extents[2]], [0.6, 0.9, 0.6, 1]),   # pastel green
+                    'loading': ([8.0, 0.0, pad_half_extents[2]], [1.0, 1.0, 0.7, 1]),    # pastel yellow
+                    'delivery': ([-8.0, 0.0, pad_half_extents[2]], [0.7, 0.8, 1.0, 1])   # pastel blue
+                }
+                for name, (center, color) in pads.items():
+                    vis_shape = self.p.createVisualShape(
+                        self.p.GEOM_BOX,
+                        halfExtents=pad_half_extents,
+                        rgbaColor=color
+                    )
+                    self.p.createMultiBody(
+                        baseMass=0,
+                        baseVisualShapeIndex=vis_shape,
+                        basePosition=center
+                    )
             except p.error as e:
                 print(f"ERROR: Failed to load plane.urdf. PyBullet error: {e}")
                 print(f"Checked pybullet_data path: {pybullet_data_dir}")
@@ -192,6 +106,9 @@ else:
             os.makedirs(custom_urdf_assets_dir, exist_ok=True)
             
             quad_urdf_filename = "quadrotor.urdf"
+            # remember quad URDF for identifying bodies
+            self._quad_urdf_filename = quad_urdf_filename
+            # corrected path for downloading quad URDF
             quad_urdf_local_path = os.path.join(custom_urdf_assets_dir, quad_urdf_filename)
             quad_mesh_filename = "quadrotor_base.obj" # Mesh referenced in quadrotor.urdf
             quad_mesh_local_path = os.path.join(custom_urdf_assets_dir, quad_mesh_filename)
@@ -218,73 +135,113 @@ else:
                     print(f"ERROR: Failed to download {quad_mesh_filename}: {e_download_mesh}")
                     # Mesh is critical for visualization
 
-            # Add the custom URDF assets directory to PyBullet's search path
-            # This allows loadURDF("quadrotor.urdf") to find the URDF,
-            # and for the URDF to find its relative mesh files (quadrotor_base.obj)
+            # Add the custom URDF assets directory to PyBullet's search path (for quadrotor)
             p.setAdditionalSearchPath(custom_urdf_assets_dir)
+            # Also ensure pybullet_data directory is in search paths for built-in URDFs (e.g., cube.urdf)
+            p.setAdditionalSearchPath(pybullet_data_dir)
 
-            # Load quadrotor model and keep track of IDs
+            # Load quadrotor and box URDFs, track IDs
             self.robot_ids = []
             for body_idx, body_sim in enumerate(self.world.bodies):
+                # Base position (lift if at origin)
                 initial_pos = body_sim.position.v.tolist()
-                # Ensure z is slightly above ground if starting at 0,0,0 for visibility
                 if initial_pos == [0.0, 0.0, 0.0]:
-                    print("DEBUG: Initial position is 0,0,0. Adjusting to 0,0,0.1 for visibility.")
-                    initial_pos = [0.0, 0.0, 0.1]
+                    initial_pos[2] = 0.1
+                # Convert orientation to XYZW for PyBullet
+                q_wxyz = body_sim.orientation.q.tolist()
+                orn_xyzw = [q_wxyz[1], q_wxyz[2], q_wxyz[3], q_wxyz[0]]
 
-                initial_orn_quat_wxyz = body_sim.orientation.q.tolist() 
-                initial_orn_quat_xyzw = [initial_orn_quat_wxyz[1], initial_orn_quat_wxyz[2], initial_orn_quat_wxyz[3], initial_orn_quat_wxyz[0]]
-                # Apply X-config yaw offset after body orientation
-                _, rotated_orn = self.p.multiplyTransforms([0,0,0], initial_orn_quat_xyzw,
-                                                        [0,0,0], self._x_offset_quat)
-                
-                try:
-                    # For visualization synced from an external engine, useFixedBase=True is appropriate
-                    # as PyBullet is not meant to simulate this body, only display it.
-                    is_fixed_base = True
-                    robot_id = self.p.loadURDF(
-                        quad_urdf_filename,
-                        basePosition=initial_pos,
-                        baseOrientation=rotated_orn,
-                        useFixedBase=is_fixed_base
-                    )
-                    self.robot_ids.append(robot_id)
-                    print(f"DEBUG: Loaded {quad_urdf_filename} for body {body_idx} with ID {robot_id} at {initial_pos}.")
+                urdf_to_load_on_pybullet_path = None
+                pybullet_load_options = {'useFixedBase': True}
+                rotated_orn = orn_xyzw # Default orientation
 
-                    # If this is the first robot, set camera to look at it
-                    if body_idx == 0:
-                        p.resetDebugVisualizerCamera(
-                            cameraDistance=1.5, # Closer view
-                            cameraYaw=30,       # Adjusted yaw
-                            cameraPitch=-30,    # Adjusted pitch
-                            cameraTargetPosition=initial_pos
+                if hasattr(body_sim, 'urdf_filename'):
+                    assigned_urdf = body_sim.urdf_filename
+
+                    if assigned_urdf == self._quad_urdf_filename: # Quadrotor
+                        _, rotated_orn = self.p.multiplyTransforms(
+                            [0, 0, 0], orn_xyzw,
+                            [0, 0, 0], self._x_offset_quat
                         )
-                        print(f"DEBUG: Camera reset to view robot {robot_id} at {initial_pos}")
+                        # Load from the downloaded absolute path
+                        urdf_to_load_on_pybullet_path = quad_urdf_local_path
+                    elif assigned_urdf == 'cube.urdf': # Cube
+                        urdf_to_load_on_pybullet_path = 'cube.urdf'
+                        pybullet_load_options['globalScaling'] = 0.5 # Ensure 0.5x0.5x0.5 size
+                    else:
+                        print(f"WARNING: Unknown URDF specified: {assigned_urdf} for body {body_idx}")
+                        self.robot_ids.append(None)
+                        continue
+                else:
+                    print(f"INFO: Body {body_idx} (type: {type(body_sim).__name__}) has no 'urdf_filename', not loading URDF.")
+                    self.robot_ids.append(None)
+                    continue
+                
+                if urdf_to_load_on_pybullet_path:
+                    try:
+                        robot_id = self.p.loadURDF(
+                            urdf_to_load_on_pybullet_path,
+                            basePosition=initial_pos,
+                            baseOrientation=rotated_orn,
+                            **pybullet_load_options
+                        )
+                        self.robot_ids.append(robot_id)
+                        print(f"DEBUG: Loaded {urdf_to_load_on_pybullet_path} for body {body_idx} with ID {robot_id} at {initial_pos}.")
 
-                except p.error as e_load_quad:
-                    print(f"ERROR: Failed to load {quad_urdf_filename} for body {body_idx}. PyBullet error: {e_load_quad}")
-                    print(f"Attempted to load from search paths including: {custom_urdf_assets_dir}")
-                    print(f"Ensure {quad_urdf_filename} and its mesh {quad_mesh_filename} are in this directory.")
-                    # Continue without this body or raise error
+                        # If this is a cube, color it brown like cardboard
+                        if assigned_urdf == 'cube.urdf':
+                            self.p.changeVisualShape(robot_id, -1, rgbaColor=[0.65, 0.50, 0.39, 1])
+
+                        # If this is the first robot (assumed to be the quad), set camera to look at it
+                        if assigned_urdf == self._quad_urdf_filename and body_idx == 0: # More specific check for quad
+                            p.resetDebugVisualizerCamera(
+                                cameraDistance=1.5, 
+                                cameraYaw=30,       
+                                cameraPitch=-30,    
+                                cameraTargetPosition=initial_pos
+                            )
+                            print(f"DEBUG: Camera reset to view robot {robot_id} at {initial_pos}")
+
+                    except p.error as e:
+                        print(f"WARNING: Could not load URDF '{urdf_to_load_on_pybullet_path}' for body {body_idx}: {e}")
+                        self.robot_ids.append(None)
+                        continue
+                else: # Should not be reached if logic above is correct
+                    self.robot_ids.append(None)
 
         def draw(self):
             target_body_for_camera = None
-            if self.world.bodies and self.robot_ids:
-                target_body_for_camera = self.world.bodies[0]
+            # Identify the primary quadrotor for camera tracking (assuming it's the first body with quadrotor URDF)
+            # This also assumes that self.world.bodies[0] is the quad if it exists.
+            # A more robust way might be to explicitly tag the main quadrotor.
+            if self.world.bodies and hasattr(self.world.bodies[0], 'urdf_filename') and self.world.bodies[0].urdf_filename == self._quad_urdf_filename:
+                 target_body_for_camera = self.world.bodies[0]
+
 
             for idx, body in enumerate(self.world.bodies):
                 pos_list = body.position.v.tolist()
                 pos_np = body.position.v 
                 orn_q_wxyz = body.orientation.q 
                 orn_q_xyzw_list = [orn_q_wxyz[1], orn_q_wxyz[2], orn_q_wxyz[3], orn_q_wxyz[0]]
-                # Apply X-config yaw offset after body orientation
-                _, rotated_draw_orn = self.p.multiplyTransforms([0,0,0], orn_q_xyzw_list,
-                                                      [0,0,0], self._x_offset_quat)
-                self.p.resetBasePositionAndOrientation(
-                    self.robot_ids[idx], pos_list, rotated_draw_orn
-                )
+                
+                is_quad = hasattr(body, 'urdf_filename') and body.urdf_filename == self._quad_urdf_filename
 
-                if body == target_body_for_camera: 
+                if is_quad:
+                    _, rotated_draw_orn = self.p.multiplyTransforms(
+                        [0, 0, 0], orn_q_xyzw_list,
+                        [0, 0, 0], self._x_offset_quat
+                    )
+                else:
+                    rotated_draw_orn = orn_q_xyzw_list
+                
+                robot_id = self.robot_ids[idx]
+                if robot_id is not None:
+                    self.p.resetBasePositionAndOrientation(
+                        robot_id, pos_list, rotated_draw_orn
+                    )
+
+                # Draw arms only for the quadcopter
+                if is_quad and body == target_body_for_camera: 
                     orientation_matrix = body.orientation.as_rotation_matrix()
                     for i, endpoint_local_np in enumerate(self.arm_local_endpoints):
                         p0_world_np = pos_np

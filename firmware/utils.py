@@ -29,4 +29,10 @@ def quaternion_multiply(q1, q2):
     Multiply two quaternions.
     """
     # TODO: implement quaternion multiplication
-    return [0.0, 0.0, 0.0, 1.0] 
+    return [0.0, 0.0, 0.0, 1.0]
+
+def wrap_angle(x):
+    """
+    Normalize angle x to the range [-pi, pi).
+    """
+    return (x + math.pi) % (2 * math.pi) - math.pi 
