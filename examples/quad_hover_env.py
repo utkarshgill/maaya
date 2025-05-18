@@ -77,19 +77,25 @@ class PS5AttitudeController(Controller):
         self.max_tilt = max_tilt_rad
         self.yaw_rate_gain = yaw_rate_gain
         if hid:
-            self.h = hid.device()
-            self.h.open(VENDOR_ID, PRODUCT_ID)
             try:
-                self.h.set_nonblocking(True)
-            except AttributeError:
-                pass
+                self.h = hid.device()
+                self.h.open(VENDOR_ID, PRODUCT_ID)
+                try:
+                    self.h.set_nonblocking(True)
+                except AttributeError:
+                    pass
+            except (OSError, IOError) as e:
+                print(f"Warning: could not open PS5 controller HID device: {e}")
+                self.h = None
         else:
             self.h = None
+        # Initialize keyboard fallback state
+        self.key_state = {}
 
     def update(self, body, dt):
         # If HID unavailable, skip
         if not self.h:
-            return None
+            return self._keyboard_control(body, dt)
         data = self.h.read(64)
         if not data or data[0] != REPORT_ID:
             return None
@@ -125,6 +131,46 @@ class PS5AttitudeController(Controller):
         yaw_cmd = np.clip(self.ctrl.yaw_pid.update(body, dt), -0.3, 0.3)
 
         return [float(thrust_cmd), float(roll_cmd), float(pitch_cmd), float(yaw_cmd)]
+
+    def _keyboard_control(self, body, dt):
+        """Keyboard fallback: w/s for thrust, a/d for yaw, arrow keys for pitch and roll."""
+        # Altitude control (w/s)
+        if self.key_state.get('w', False):
+            z_sp = self.ctrl.z_pid.setpoint + self.thrust_gain * dt
+            self.ctrl.z_pid.setpoint = float(np.clip(z_sp, 0.0, 20.0))
+        if self.key_state.get('s', False):
+            z_sp = self.ctrl.z_pid.setpoint - self.thrust_gain * dt
+            self.ctrl.z_pid.setpoint = float(np.clip(z_sp, 0.0, 20.0))
+        # Attitude control (arrows)
+        max_tilt = self.max_tilt
+        # Roll (left/right)
+        if self.key_state.get('left', False):
+            self.ctrl.roll_pid.setpoint = -max_tilt
+        elif self.key_state.get('right', False):
+            self.ctrl.roll_pid.setpoint = max_tilt
+        else:
+            self.ctrl.roll_pid.setpoint = 0.0
+        # Pitch (up/down)
+        if self.key_state.get('up', False):
+            self.ctrl.pitch_pid.setpoint = max_tilt
+        elif self.key_state.get('down', False):
+            self.ctrl.pitch_pid.setpoint = -max_tilt
+        else:
+            self.ctrl.pitch_pid.setpoint = 0.0
+        # Yaw control (a/d)
+        yaw_rate = self.yaw_rate_gain * dt
+        if self.key_state.get('a', False):
+            yaw_sp = self.ctrl.yaw_pid.setpoint + yaw_rate
+            self.ctrl.yaw_pid.setpoint = ((yaw_sp + np.pi) % (2 * np.pi)) - np.pi
+        if self.key_state.get('d', False):
+            yaw_sp = self.ctrl.yaw_pid.setpoint - yaw_rate
+            self.ctrl.yaw_pid.setpoint = ((yaw_sp + np.pi) % (2 * np.pi)) - np.pi
+        # Compute PID outputs
+        thrust_cmd = float(np.clip(9.8 + self.ctrl.z_pid.update(body, dt), 0.0, 15.0))
+        roll_cmd = float(np.clip(self.ctrl.roll_pid.update(body, dt), -max_tilt, max_tilt))
+        pitch_cmd = float(np.clip(self.ctrl.pitch_pid.update(body, dt), -max_tilt, max_tilt))
+        yaw_cmd = float(np.clip(self.ctrl.yaw_pid.update(body, dt), -0.3, 0.3))
+        return [thrust_cmd, roll_cmd, pitch_cmd, yaw_cmd]
 
 class Quadcopter(Body):
     def __init__(self, position=None, mass=1.0, arm_length=0.3):
@@ -165,6 +211,8 @@ class QuadHoverEnv(gym.Env):
         self.action_space = spaces.Box(-np.inf, np.inf, shape=(0,), dtype=np.float32)
 
         self.renderer = None
+        # Track whether Matplotlib events are attached
+        self._key_handlers_attached = False
 
     def _build_sim(self):
         # 1. Create and configure the body (Quadcopter)
@@ -220,15 +268,74 @@ class QuadHoverEnv(gym.Env):
     def render(self, mode=None):
         if self.render_mode is None:
             return None
+        # Initialize renderer once
         if self.renderer is None:
             self.renderer = Renderer(self.sim.world)
-        # Only draw current state; physics was already stepped in step()
+        # Matplotlib GUI: attach key handlers once
+        if hasattr(self.renderer, 'fig'):
+            if not self._key_handlers_attached:
+                fig = self.renderer.fig
+                fig.canvas.mpl_connect('key_press_event', self._on_key_press)
+                fig.canvas.mpl_connect('key_release_event', self._on_key_release)
+                self._key_handlers_attached = True
+        # PyBullet GUI: poll keyboard events
+        elif hasattr(self.renderer, 'p'):
+            events = self.renderer.p.getKeyboardEvents()
+            for code, state in events.items():
+                # Determine key down/up
+                if state & self.renderer.p.KEY_IS_DOWN or state & self.renderer.p.KEY_WAS_TRIGGERED:
+                    down = True
+                elif state & self.renderer.p.KEY_WAS_RELEASED:
+                    down = False
+                else:
+                    continue
+                # Map codes to our key_state
+                if code in (ord('w'), ord('W')):
+                    # Track thrust key state
+                    self.att_ctrl.key_state['w'] = down
+                    # Disable wireframe toggle only on initial press
+                    if state & self.renderer.p.KEY_WAS_TRIGGERED:
+                        self.renderer.p.configureDebugVisualizer(self.renderer.p.COV_ENABLE_WIREFRAME, 0)
+                if code in (ord('s'), ord('S')):
+                    self.att_ctrl.key_state['s'] = down
+                if code in (ord('a'), ord('A')):
+                    self.att_ctrl.key_state['a'] = down
+                if code in (ord('d'), ord('D')):
+                    self.att_ctrl.key_state['d'] = down
+                if code == self.renderer.p.B3G_LEFT_ARROW:
+                    self.att_ctrl.key_state['left'] = down
+                if code == self.renderer.p.B3G_RIGHT_ARROW:
+                    self.att_ctrl.key_state['right'] = down
+                if code == self.renderer.p.B3G_UP_ARROW:
+                    self.att_ctrl.key_state['up'] = down
+                if code == self.renderer.p.B3G_DOWN_ARROW:
+                    self.att_ctrl.key_state['down'] = down
+        # Draw current state (PyBullet draw advances simulation internally)
         self.renderer.draw()
 
     def close(self):
-        if self.renderer:
+        if not self.renderer:
+            return
+        # Close Matplotlib figure if present
+        if hasattr(self.renderer, 'fig'):
             import matplotlib.pyplot as plt
             plt.close(self.renderer.fig)
+        # Disconnect PyBullet client if present
+        elif hasattr(self.renderer, 'p') and hasattr(self.renderer, 'client'):
+            try:
+                self.renderer.p.disconnect(self.renderer.client)
+            except Exception:
+                pass
+
+    def _on_key_press(self, event):
+        """Handle key press events for keyboard fallback control."""
+        key = event.key
+        self.att_ctrl.key_state[key] = True
+
+    def _on_key_release(self, event):
+        """Handle key release events for keyboard fallback control."""
+        key = event.key
+        self.att_ctrl.key_state[key] = False
 
 # -------------------------------------------------------------------------
 def _stdin_reader(ctrl_ref):

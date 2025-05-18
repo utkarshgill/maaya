@@ -1,8 +1,4 @@
 import numpy as np
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-from matplotlib.animation import FuncAnimation
-from mpl_toolkits.mplot3d.art3d import Line3DCollection
 
 class MatplotlibRenderer:
     def __init__(self, world):
@@ -104,6 +100,8 @@ else:
             self.world = world
             self.p = p
             self.client = p.connect(p.GUI if gui else p.DIRECT)
+            # Disable PyBullet's wireframe toggle to prevent flickering on 'w' press
+            self.p.configureDebugVisualizer(self.p.COV_ENABLE_WIREFRAME, 0)
 
             # Camera smoothing parameters
             self.smoothed_camera_yaw_deg = None
@@ -304,8 +302,6 @@ else:
                     cameraPitch=TPP_CAMERA_PITCH,
                     cameraTargetPosition=smoothed_target_pos_list
                 )
-            
-            self.p.stepSimulation()
 
         def run(self, frames):
             # Advance physics and render
