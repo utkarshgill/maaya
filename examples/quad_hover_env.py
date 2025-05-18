@@ -291,12 +291,10 @@ class QuadHoverEnv(gym.Env):
                     continue
                 # Map codes to our key_state
                 if code in (ord('w'), ord('W')):
-                    # Track thrust key state
+                    # Thrust up
                     self.att_ctrl.key_state['w'] = down
-                    # Disable wireframe toggle only on initial press
-                    if state & self.renderer.p.KEY_WAS_TRIGGERED:
-                        self.renderer.p.configureDebugVisualizer(self.renderer.p.COV_ENABLE_WIREFRAME, 0)
-                if code in (ord('s'), ord('S')):
+                elif code in (ord('s'), ord('S')):
+                    # Thrust down
                     self.att_ctrl.key_state['s'] = down
                 if code in (ord('a'), ord('A')):
                     self.att_ctrl.key_state['a'] = down

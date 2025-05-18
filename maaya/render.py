@@ -100,8 +100,9 @@ else:
             self.world = world
             self.p = p
             self.client = p.connect(p.GUI if gui else p.DIRECT)
-            # Disable PyBullet's wireframe toggle to prevent flickering on 'w' press
-            self.p.configureDebugVisualizer(self.p.COV_ENABLE_WIREFRAME, 0)
+            # Disable PyBullet's built-in keyboard shortcuts (wireframe, shadows, etc.)
+            if hasattr(self.p, 'COV_ENABLE_KEYBOARD_SHORTCUTS'):
+                self.p.configureDebugVisualizer(self.p.COV_ENABLE_KEYBOARD_SHORTCUTS, 0)
 
             # Camera smoothing parameters
             self.smoothed_camera_yaw_deg = None
