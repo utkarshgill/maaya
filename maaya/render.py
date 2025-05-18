@@ -1,8 +1,9 @@
 import numpy as np
 
 class MatplotlibRenderer:
-    def __init__(self, world):
+    def __init__(self, world, config='X'):
         self.world = world
+        self.config = config.upper()
         # Enable interactive mode so plotting does not block
         plt.ion()
         self.fig = plt.figure()
@@ -18,11 +19,20 @@ class MatplotlibRenderer:
         self.quadcopter_lines = []
 
         for body in self.world.bodies:
-            # Define lines for a quadcopter X model with front half red and back half black
-            lines = [[(-1, -1, 0), (0, 0, 0)], [(0, 0, 0), (1, 1, 0)],
-                     [(1, -1, 0), (0, 0, 0)], [(0, 0, 0), (-1, 1, 0)]]
-            colors = ['r', 'k', 'k', 'r']  # Alternating colors for the arms
-            line_collection = Line3DCollection(lines, colors=colors, linewidths=2)
+            # Define lines based on configuration
+            if self.config == 'X':
+                local_lines = [[(-1, -1, 0), (0, 0, 0)],
+                               [(0, 0, 0), (1, 1, 0)],
+                               [(1, -1, 0), (0, 0, 0)],
+                               [(0, 0, 0), (-1, 1, 0)]]
+                colors = ['r', 'k', 'k', 'r']
+            else:
+                local_lines = [[(0, 1, 0), (0, 0, 0)],
+                               [(0, 0, 0), (0, -1, 0)],
+                               [(1, 0, 0), (0, 0, 0)],
+                               [(0, 0, 0), (-1, 0, 0)]]
+                colors = ['r', 'r', 'k', 'k']
+            line_collection = Line3DCollection(local_lines, colors=colors, linewidths=2)
             self.quadcopter_lines.append(self.ax.add_collection3d(line_collection))
 
     def update_func(self, frame):
@@ -33,8 +43,16 @@ class MatplotlibRenderer:
             orientation = body.orientation.as_rotation_matrix()
             
             # Define the initial lines of the quadcopter in the local frame
-            lines = np.array([[[-1, -1, 0], [0, 0, 0]], [[0, 0, 0], [1, 1, 0]],
-                              [[1, -1, 0], [0, 0, 0]], [[0, 0, 0], [-1, 1, 0]]])
+            if self.config == 'X':
+                lines = np.array([[[-1, -1, 0], [0, 0, 0]],
+                                   [[0, 0, 0], [1, 1, 0]],
+                                   [[1, -1, 0], [0, 0, 0]],
+                                   [[0, 0, 0], [-1, 1, 0]]])
+            else:
+                lines = np.array([[[0, 1, 0], [0, 0, 0]],
+                                   [[0, 0, 0], [0, -1, 0]],
+                                   [[1, 0, 0], [0, 0, 0]],
+                                   [[0, 0, 0], [-1, 0, 0]]])
             
             # Rotate lines according to the orientation matrix
             rotated_lines = []
@@ -67,10 +85,16 @@ class MatplotlibRenderer:
             position = body.position.v
             orientation = body.orientation.as_rotation_matrix()
             # Define the initial lines of the quadcopter in the local frame
-            lines = _np.array([[[-1, -1, 0], [0, 0, 0]],
-                               [[0, 0, 0], [1, 1, 0]],
-                               [[1, -1, 0], [0, 0, 0]],
-                               [[0, 0, 0], [-1, 1, 0]]])
+            if self.config == 'X':
+                lines = _np.array([[[-1, -1, 0], [0, 0, 0]],
+                                   [[0, 0, 0], [1, 1, 0]],
+                                   [[1, -1, 0], [0, 0, 0]],
+                                   [[0, 0, 0], [-1, 1, 0]]])
+            else:
+                lines = _np.array([[[0, 1, 0], [0, 0, 0]],
+                                   [[0, 0, 0], [0, -1, 0]],
+                                   [[1, 0, 0], [0, 0, 0]],
+                                   [[0, 0, 0], [-1, 0, 0]]])
             rotated_lines = []
             for line in lines:
                 # Rotate then translate
@@ -91,7 +115,7 @@ else:
     import pybullet_data
 
     class PyBulletRenderer:
-        def __init__(self, world, gui=True):
+        def __init__(self, world, config='X', gui=True):
             import os
             import urllib.request
             import pybullet_data
@@ -103,6 +127,11 @@ else:
             # Disable PyBullet's built-in keyboard shortcuts (wireframe, shadows, etc.)
             if hasattr(self.p, 'COV_ENABLE_KEYBOARD_SHORTCUTS'):
                 self.p.configureDebugVisualizer(self.p.COV_ENABLE_KEYBOARD_SHORTCUTS, 0)
+            # Precompute yaw offset: apply 45° rotation for X-config
+            if config.upper() == 'X':
+                self._x_offset_quat = self.p.getQuaternionFromEuler([0, 0, np.pi/4])
+            else:
+                self._x_offset_quat = [0, 0, 0, 1]
 
             # Camera smoothing parameters
             self.smoothed_camera_yaw_deg = None
@@ -110,16 +139,25 @@ else:
             self.smoothed_camera_target_pos = None
 
             # Arm visualization parameters
-            self.arm_vis_length = 0.25 # Slightly increased for visibility
-            self.arm_colors = [[1, 0, 0, 1], [1, 0, 0, 1], [0.1, 0.1, 0.1, 1], [0.1, 0.1, 0.1, 1]] # RGBA: FR, FL, BR, BL (using dark grey for black)
+            self.arm_vis_length = 0.25  # Slightly increased for visibility
+            self.arm_colors = [[1, 0, 0, 1], [1, 0, 0, 1], [0.1, 0.1, 0.1, 1], [0.1, 0.1, 0.1, 1]]  # RGBA: FR, FL, BR, BL
             L = self.arm_vis_length
-            self.arm_local_endpoints = [
-                np.array([L, -L, 0]), # Front-Right 
-                np.array([L, L, 0]),   # Front-Left
-                np.array([-L, -L, 0]),# Back-Right
-                np.array([-L, L, 0])  # Back-Left
-            ]
-            self.arm_debug_line_ids = [None] * len(self.arm_local_endpoints) # Initialize IDs for reusable lines
+            # Select local endpoints based on configuration
+            if config.upper() == 'X':
+                self.arm_local_endpoints = [
+                    np.array([L, -L, 0]),  # front-right
+                    np.array([L, L, 0]),   # front-left
+                    np.array([-L, -L, 0]), # back-right
+                    np.array([-L, L, 0])   # back-left
+                ]
+            else:
+                self.arm_local_endpoints = [
+                    np.array([0, L, 0]),   # front
+                    np.array([L, 0, 0]),    # right
+                    np.array([0, -L, 0]),   # back
+                    np.array([-L, 0, 0])    # left
+                ]
+            self.arm_debug_line_ids = [None] * len(self.arm_local_endpoints)  # Initialize IDs for reusable lines
 
             # Set up and load standard PyBullet assets (like plane.urdf) FIRST
             pybullet_data_dir = pybullet_data.getDataPath()
@@ -196,16 +234,19 @@ else:
 
                 initial_orn_quat_wxyz = body_sim.orientation.q.tolist() 
                 initial_orn_quat_xyzw = [initial_orn_quat_wxyz[1], initial_orn_quat_wxyz[2], initial_orn_quat_wxyz[3], initial_orn_quat_wxyz[0]]
+                # Apply X-config yaw offset after body orientation
+                _, rotated_orn = self.p.multiplyTransforms([0,0,0], initial_orn_quat_xyzw,
+                                                        [0,0,0], self._x_offset_quat)
                 
                 try:
                     # For visualization synced from an external engine, useFixedBase=True is appropriate
                     # as PyBullet is not meant to simulate this body, only display it.
-                    is_fixed_base = True 
-                    robot_id = p.loadURDF(
-                        quad_urdf_filename, 
+                    is_fixed_base = True
+                    robot_id = self.p.loadURDF(
+                        quad_urdf_filename,
                         basePosition=initial_pos,
-                        baseOrientation=initial_orn_quat_xyzw,
-                        useFixedBase=is_fixed_base 
+                        baseOrientation=rotated_orn,
+                        useFixedBase=is_fixed_base
                     )
                     self.robot_ids.append(robot_id)
                     print(f"DEBUG: Loaded {quad_urdf_filename} for body {body_idx} with ID {robot_id} at {initial_pos}.")
@@ -236,9 +277,11 @@ else:
                 pos_np = body.position.v 
                 orn_q_wxyz = body.orientation.q 
                 orn_q_xyzw_list = [orn_q_wxyz[1], orn_q_wxyz[2], orn_q_wxyz[3], orn_q_wxyz[0]]
-                
+                # Apply X-config yaw offset after body orientation
+                _, rotated_draw_orn = self.p.multiplyTransforms([0,0,0], orn_q_xyzw_list,
+                                                      [0,0,0], self._x_offset_quat)
                 self.p.resetBasePositionAndOrientation(
-                    self.robot_ids[idx], pos_list, orn_q_xyzw_list
+                    self.robot_ids[idx], pos_list, rotated_draw_orn
                 )
 
                 if body == target_body_for_camera: 
