@@ -23,6 +23,20 @@ import sys
 import termios
 import time
 import glob
+from pathlib import Path
+
+# Ensure project root is on PYTHONPATH so we can import sim package when running from examples/
+_ROOT = Path(__file__).resolve().parent.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+# Lazy-import PyBullet renderer and simulation classes; guarded in case dependencies are missing
+try:
+    from sim import Vector3D, Quaternion, Body, World, Renderer
+except Exception as _e:
+    print(f"[orient_filter] WARNING: Could not import renderer dependencies ({_e}). Visualization disabled.")
+    Renderer = None
+    World = Body = Vector3D = Quaternion = None
 
 CMD_RAW_IMU = 102
 ACC_SCALE = 9.80665 / 4096.0      # m/s² per LSB
@@ -103,6 +117,24 @@ def main():
     px = py = pz = 0.0        # m
     last_t = time.time()
 
+    # ------------------------------------------------------------------
+    # Initialize visualization if Renderer is available
+    vis_enabled = Renderer is not None
+    if vis_enabled:
+        # Build a minimal world with a single quad body for rendering
+        world = World(gravity=None, dt=0.01)
+        quad = Body()
+        # Tag URDF so Renderer loads the proper model
+        quad.urdf_filename = "quadrotor.urdf"
+        world.add_body(quad)
+
+        # Instantiate renderer (PyBullet GUI by default)
+        try:
+            renderer = Renderer(world, config='X', gui=True)
+        except Exception as _e:
+            print(f"[orient_filter] WARNING: Failed to initialize renderer ({_e}). Disabling visualization.")
+            vis_enabled = False
+
     print("t\troll\tpitch\tyaw\tax\tay\taz\tvx\tvy\tvz\tpx\tpy\tpz")
     next_req = 0.0
     try:
@@ -163,6 +195,22 @@ def main():
                 px += vx * dt
                 py += vy * dt
                 pz += vz * dt
+
+                # ------------------------------------------------------
+                # Update visualization
+                if vis_enabled:
+                    # Update quad state
+                    quad.position = Vector3D(0.0, 0.0, 1.1)
+                    quad.velocity = Vector3D(0.0, 0.0, 0.0)
+                    quad.orientation = Quaternion.from_euler(roll, pitch, yaw)
+                    # Advance renderer (draw updates PyBullet objects)
+                    renderer.draw()
+                    # Step PyBullet simulation for smooth visuals
+                    if hasattr(renderer, 'p'):
+                        try:
+                            renderer.p.stepSimulation()
+                        except Exception:
+                            pass
 
                 print(f"{now:.2f}\t{math.degrees(roll):.2f}\t{math.degrees(pitch):.2f}\t{math.degrees(yaw):.2f}\t"
                       f"{ax:.2f}\t{ay:.2f}\t{az:.2f}\t"
