@@ -1,7 +1,9 @@
 ![Intersect](https://github.com/user-attachments/assets/bc104e5d-e3e3-448c-97bf-49c1e514f452)
 
 # miniflight
-Simple physics engine for simulating rigid body dynamics.
+miniflight is a minimal flight control firmware for quads. This may not be the best flight stack, but it is a flight stack.
+
+Open source flight controllers are bloated, complex, and nearly impossible to debug or extend. Due to its extreme simplicity, miniflight aims to be the easiest controller to add targets to, with support for both config and simulation.
 
 ![Screen Recording 2025-05-19 at 9 16 49 AM (6)](https://github.com/user-attachments/assets/62436609-37f9-44b1-bcea-3ab8a77b1491)
 
