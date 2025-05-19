@@ -1,4 +1,6 @@
-# maaya
+![Intersect](https://github.com/user-attachments/assets/bc104e5d-e3e3-448c-97bf-49c1e514f452)
+
+# miniflight
 Simple physics engine for simulating rigid body dynamics.
 
 ![Screen Recording 2025-05-19 at 9 16 49 AM (6)](https://github.com/user-attachments/assets/62436609-37f9-44b1-bcea-3ab8a77b1491)
