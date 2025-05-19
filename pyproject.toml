@@ -1,5 +1,5 @@
 [project]
-name = "maaya"
+name = "miniflight"
 version = "0.1.0"
 description = "Physics engine"
 

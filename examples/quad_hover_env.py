@@ -56,7 +56,7 @@ class Quadcopter(Body):
         self.arm_length = arm_length
 
 class QuadHoverEnv(gym.Env):
-    """Gymnasium environment for a quadrotor hovering demo using Maaya."""
+    """Gymnasium environment for a quadrotor hovering demo using miniflight."""
     metadata = {'render_modes': ['human'], 'render_fps': 50}
 
     def __init__(self, render_mode='human', dt=0.01, frame_skip=1, config='X'):

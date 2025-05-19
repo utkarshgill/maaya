@@ -1,4 +1,4 @@
-# maaya/__init__.py
+# miniflight/__init__.py
 
 from .math import Vector3D, Quaternion
 from .dynamics import Body, EulerIntegrator, RungeKuttaIntegrator, GravitationalForce, GroundCollision

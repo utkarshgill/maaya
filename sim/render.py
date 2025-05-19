@@ -101,7 +101,7 @@ else:
                 raise # Re-raise the error to stop execution if plane can't be loaded
 
             # Prepare local URDF directory for quadrotor model
-            module_dir = os.path.dirname(__file__) # Should be maaya/render/
+            module_dir = os.path.dirname(__file__) # Should be miniflight/render/
             custom_urdf_assets_dir = os.path.join(module_dir, 'data', 'Quadrotor')
             os.makedirs(custom_urdf_assets_dir, exist_ok=True)
             

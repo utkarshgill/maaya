@@ -9,8 +9,8 @@ Simple physics engine for simulating rigid body dynamics.
 
 1. Clone and enter the repo:
    ```bash
-   git clone https://github.com/utkarshgill/maaya.git
-   cd maaya
+   git clone https://github.com/utkarshgill/miniflight.git
+   cd miniflight
    ```
 
 2. Install dependencies & create environment:
