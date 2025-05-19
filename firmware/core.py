@@ -4,7 +4,7 @@ Core system engine: scheduler, state machine, control loops.
 
 import math
 import numpy as np
-from maaya import Controller
+from sim import Controller
 from .utils import wrap_angle
 
 class Scheduler:

@@ -1,8 +1,8 @@
 """Test GenericMixer correctness for a plus quad configuration."""
 
 import numpy as np
-from maaya.math import Vector3D
-from maaya import GenericMixer
+from sim.math import Vector3D
+from sim import GenericMixer
 
 
 class Dummy:

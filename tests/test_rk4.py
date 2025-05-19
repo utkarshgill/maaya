@@ -11,8 +11,8 @@ import math
 import numpy as np
 import pytest
 
-from maaya import Body, RungeKuttaIntegrator
-from maaya.math import Vector3D
+from sim import Body, RungeKuttaIntegrator
+from sim.math import Vector3D
 
 
 @pytest.mark.parametrize("dt", [1e-3, 5e-3, 1e-2])

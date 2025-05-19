@@ -13,7 +13,7 @@ import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
 
-from maaya import (
+from sim import (
     Vector3D, Quaternion, Body, Simulator, World, MultiForce,
     GravitationalForce, RungeKuttaIntegrator, GroundCollision,
     IMUSensor, # Controller and PIDController are now in firmware

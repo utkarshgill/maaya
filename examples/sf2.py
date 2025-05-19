@@ -5,7 +5,7 @@ import math
 import sys
 sys.path.insert(0, '/Users/engelbart/Desktop/stuff')
 
-from maaya import Vector3D, Quaternion, Body, World, Renderer, GravitationalForce
+from sim import Vector3D, Quaternion, Body, World, Renderer, GravitationalForce
 
 class QuadCopter(Body):
     def __init__(self, position=None, velocity=None, acceleration=None, mass=1.0,

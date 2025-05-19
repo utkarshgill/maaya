@@ -9,7 +9,7 @@ try:
 except ImportError:
     hid = None
 
-from maaya import Controller
+from sim import Controller
 from ..core import StabilityController
 from ..utils import wrap_angle # Import the utility
 

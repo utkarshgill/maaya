@@ -8,7 +8,7 @@ if root_dir not in sys.path:
     sys.path.insert(0, root_dir)
 
 import numpy as np
-from maaya.math import Vector3D, Quaternion
+from sim.math import Vector3D, Quaternion
 from scipy.spatial.transform import Rotation as SciRot
 
 class TestMath(unittest.TestCase):
