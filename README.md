@@ -7,7 +7,7 @@ Simple physics engine for simulating rigid body dynamics.
 
 1. Clone and enter the repo:
    ```bash
-   git clone https://github.com/<your-username>/maaya.git
+   git clone https://github.com/utkarshgill/maaya.git
    cd maaya
    ```
 
