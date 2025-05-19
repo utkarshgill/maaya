@@ -1,9 +1,9 @@
 <div align="center">
 <picture>
-   <img src="https://github.com/user-attachments/assets/bc104e5d-e3e3-448c-97bf-49c1e514f452" alt="miniflight logo" width="50%"/>
+   <img src="https://github.com/user-attachments/assets/e083cd13-de4e-4212-91ec-881500eb5bd8" alt="miniflight logo" width="30%"/>
 </picture>
 
-miniflight is a minimal flight control firmware for quads.
+miniflight is a minimal flight control firmware.
 
 </div>
 
