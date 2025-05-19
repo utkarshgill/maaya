@@ -11,7 +11,7 @@ except ImportError:
 
 from sim import Controller
 from ..core import StabilityController
-from ..utils import wrap_angle # Import the utility
+from ..utils import wrap_angle, GRAVITY # Import utilities including gravity constant
 
 # PS5 DualSense constants
 VENDOR_ID = 0x054C
@@ -99,7 +99,7 @@ class DualSenseController(Controller):
         yaw_raw_error = self.stability_ctrl.yaw_setpoint - body.orientation.to_euler()[2]
         yaw_error = wrap_angle(yaw_raw_error)
 
-        thrust_cmd = float(np.clip(9.8 + self.stability_ctrl.z_pid.update(z_error, dt), 0.0, 15.0))
+        thrust_cmd = float(np.clip(GRAVITY + self.stability_ctrl.z_pid.update(z_error, dt), 0.0, 15.0))
         roll_cmd   = float(np.clip(self.stability_ctrl.roll_pid.update(roll_error, dt), -self.max_tilt, self.max_tilt))
         pitch_cmd  = float(np.clip(self.stability_ctrl.pitch_pid.update(pitch_error, dt), -self.max_tilt, self.max_tilt))
         yaw_cmd    = float(np.clip(self.stability_ctrl.yaw_pid.update(yaw_error, dt), -0.3, 0.3))
@@ -149,7 +149,7 @@ class DualSenseController(Controller):
         yaw_raw_error_kb = self.stability_ctrl.yaw_setpoint - body.orientation.to_euler()[2]
         yaw_error_kb = wrap_angle(yaw_raw_error_kb)
 
-        thrust_cmd = float(np.clip(9.8 + self.stability_ctrl.z_pid.update(z_error_kb, dt), 0.0, 15.0))
+        thrust_cmd = float(np.clip(GRAVITY + self.stability_ctrl.z_pid.update(z_error_kb, dt), 0.0, 15.0))
         roll_cmd   = float(np.clip(self.stability_ctrl.roll_pid.update(roll_error_kb, dt), -self.max_tilt, self.max_tilt))
         pitch_cmd  = float(np.clip(self.stability_ctrl.pitch_pid.update(pitch_error_kb, dt), -self.max_tilt, self.max_tilt))
         yaw_cmd    = float(np.clip(self.stability_ctrl.yaw_pid.update(yaw_error_kb, dt), -0.3, 0.3))

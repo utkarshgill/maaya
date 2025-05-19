@@ -182,6 +182,8 @@ class QuadHoverEnv(gym.Env):
                 self._key_handlers_attached = True
         # PyBullet GUI: poll keyboard events
         elif hasattr(self.renderer, 'p'):
+            # Reset key states each frame to avoid sticky keys on quick presses
+            self.att_ctrl.key_state.clear()
             events = self.renderer.p.getKeyboardEvents()
             for code, state in events.items():
                 # Determine key down/up

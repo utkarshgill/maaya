@@ -4,6 +4,9 @@
 import numpy as np
 from .math import Vector3D, Quaternion
 
+# Add gravity constant to replace hard-coded values
+GRAVITY = 9.8
+
 # Integrators
 class EulerIntegrator:
     """Simple Euler integrator for Body state updates."""
@@ -123,7 +126,7 @@ class Body:
 # Force models
 class GravitationalForce:
     """Uniform gravity."""
-    def __init__(self, g=9.8):
+    def __init__(self, g=GRAVITY):
         self.g = g
 
     def apply_to(self, body):

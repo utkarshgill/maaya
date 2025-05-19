@@ -35,4 +35,7 @@ def wrap_angle(x):
     """
     Normalize angle x to the range [-pi, pi).
     """
-    return (x + math.pi) % (2 * math.pi) - math.pi 
+    return (x + math.pi) % (2 * math.pi) - math.pi
+
+# Add gravity constant for controllers and mixers
+GRAVITY = 9.8 

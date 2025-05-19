@@ -50,9 +50,9 @@ class Vector3D:
 
     def apply_rotation(self, quaternion):
         # Rotates this vector by the given quaternion
-        q_vector = Quaternion(0, *self.v)
-        q_rotated = quaternion * q_vector * quaternion.conjugate()
-        self.v = q_rotated.q[1:]
+        # Rotate vector using rotation matrix for speed
+        R = quaternion.as_rotation_matrix()
+        self.v = R @ self.v
 
     def __repr__(self):
         return f"Vector3D({self.v[0]}, {self.v[1]}, {self.v[2]})"
@@ -128,12 +128,10 @@ class Quaternion:
 
     def rotate(self, vector):
         """Rotate a Vector3D by this quaternion and return a new Vector3D."""
-        # Convert vector into a quaternion with zero scalar part
-        v_quat = Quaternion(0, vector.v[0], vector.v[1], vector.v[2])
-        # Apply rotation
-        rotated_quat = self * v_quat * self.conjugate()
-        # Return rotated vector
-        return Vector3D(rotated_quat.q[1], rotated_quat.q[2], rotated_quat.q[3])
+        # Rotate vector using rotation matrix for speed
+        R = self.as_rotation_matrix()
+        rotated_v = R @ vector.v
+        return Vector3D(*rotated_v)
 
     @staticmethod
     def from_axis_angle(axis, angle):
