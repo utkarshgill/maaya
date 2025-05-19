@@ -1,7 +1,10 @@
-![Intersect](https://github.com/user-attachments/assets/bc104e5d-e3e3-448c-97bf-49c1e514f452)
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/bc104e5d-e3e3-448c-97bf-49c1e514f452" alt="Intersect" width="350"/>
+</p>
 
-# miniflight
 miniflight is a minimal flight control firmware for quads. This may not be the best flight stack, but it is a flight stack.
+
+---
 
 Open source flight controllers are bloated, complex, and nearly impossible to debug or extend. Due to its extreme simplicity, miniflight aims to be the easiest controller to add targets to, with support for both config and simulation.
 
