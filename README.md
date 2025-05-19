@@ -1,6 +1,9 @@
 # maaya
 Simple physics engine for simulating rigid body dynamics.
 
+![Screen Recording 2025-05-19 at 9 16 49 AM (2)](https://github.com/user-attachments/assets/62bd178b-514b-41c4-867a-77610ebc4688)
+
+
 ## Getting Started
 
 1. Clone and enter the repo:
