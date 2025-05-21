@@ -1,8 +1,8 @@
 """Test GenericMixer correctness for a plus quad configuration."""
 
 import numpy as np
-from sim.math import Vector3D
-from sim import GenericMixer
+from common.math import Vector3D
+from tools.sim import GenericMixer
 
 
 class Dummy:

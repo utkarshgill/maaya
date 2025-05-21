@@ -13,13 +13,13 @@ import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
 
-from sim import (
+from tools.sim import (
     Vector3D, Quaternion, Body, Simulator, World, MultiForce,
     GravitationalForce, RungeKuttaIntegrator, GroundCollision,
     IMUSensor, # Controller and PIDController are now in firmware
     GenericMixer, Motor, Renderer, Actuator
 )
-from firmware.targets import get_target # Import for the new controller
+from targets import get_target # Import for the new controller
 
 # Grasp actuator for picking up and carrying a box
 class GraspActuator(Actuator):

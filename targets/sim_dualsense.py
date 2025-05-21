@@ -9,9 +9,9 @@ try:
 except ImportError:
     hid = None
 
-from sim import Controller
-from ..core import StabilityController
-from ..utils import wrap_angle, GRAVITY # Import utilities including gravity constant
+from tools.sim import Controller
+from miniflight.control import StabilityController
+from miniflight.utils import wrap_angle, GRAVITY # Import utilities including gravity constant
 
 # PS5 DualSense constants
 VENDOR_ID = 0x054C

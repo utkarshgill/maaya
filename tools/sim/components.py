@@ -2,7 +2,7 @@
 # Sensors, actuators, mixers, and controllers
 
 import numpy as np
-from .math import Vector3D
+from common.math import Vector3D
 
 # Sensors
 class Sensor:

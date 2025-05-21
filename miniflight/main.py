@@ -3,9 +3,9 @@
 Entry point for firmware: load configuration and start the scheduler.
 """
 
-from utils import load_config, log
-from core import Scheduler
-from hal import HAL
+from miniflight.utils import load_config, log
+from miniflight.scheduler import Scheduler
+from miniflight.hal import HAL
 from targets import get_target
 
 def main():

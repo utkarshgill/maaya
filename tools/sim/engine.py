@@ -2,7 +2,7 @@
 # Core simulation engine: messaging, scheduling, world, and high-level simulator
 
 import numpy as np
-from .math import Vector3D
+from common.math import Vector3D
 
 # --- World ---
 class World:

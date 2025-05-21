@@ -2,7 +2,7 @@
 # Rigid-body dynamics: Body class, integrators, and force models
 
 import numpy as np
-from .math import Vector3D, Quaternion
+from common.math import Vector3D, Quaternion
 
 # Add gravity constant to replace hard-coded values
 GRAVITY = 9.8

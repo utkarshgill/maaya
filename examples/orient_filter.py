@@ -32,7 +32,7 @@ if str(_ROOT) not in sys.path:
 
 # Lazy-import PyBullet renderer and simulation classes; guarded in case dependencies are missing
 try:
-    from sim import Vector3D, Quaternion, Body, World, Renderer
+    from tools.sim import Vector3D, Quaternion, Body, World, Renderer
 except Exception as _e:
     print(f"[orient_filter] WARNING: Could not import renderer dependencies ({_e}). Visualization disabled.")
     Renderer = None

@@ -2,7 +2,7 @@ import numpy as np
 import sys
 sys.path.insert(0, '/Users/engelbart/Desktop/stuff')
 
-from sim import Vector3D, Quaternion, Body, World, Renderer
+from tools.sim import Vector3D, Quaternion, Body, World, Renderer
 
 #!/usr/bin/env python
 
