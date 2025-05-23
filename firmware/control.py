@@ -2,8 +2,22 @@
 Control module: generic PID and stability controllers.
 """
 import numpy as np
-from tools.sim import Controller, Quaternion
-from miniflight.utils import load_config, wrap_angle, GRAVITY
+import json
+
+from sim import Controller, Quaternion
+from common.math import wrap_angle, GRAVITY
+from common.interface import Actuator
+
+
+def load_config(path: str = "config.json") -> dict:
+    """
+    Load JSON configuration and return a dict.
+    """
+    try:
+        with open(path, 'r') as f:
+            return json.load(f)
+    except Exception:
+        return {}
 
 class PIDController:
     """
@@ -40,25 +54,22 @@ class StabilityController(Controller):
     def __init__(self, config=None):
         # Load configuration for PID gains if provided
         if config is None:
-            try:
-                config = load_config()
-            except Exception:
-                config = {}
-        pid_cfg = config.get("pid", {})
+            config = load_config()
+        pid_cfg = config.get('pid', {})
         # Extract per-loop gains with defaults
-        x_cfg = pid_cfg.get("x", {})
-        y_cfg = pid_cfg.get("y", {})
-        z_cfg = pid_cfg.get("z", {})
-        roll_cfg = pid_cfg.get("roll", {})
-        pitch_cfg = pid_cfg.get("pitch", {})
-        yaw_cfg = pid_cfg.get("yaw", {})
+        x_cfg = pid_cfg.get('x', {})
+        y_cfg = pid_cfg.get('y', {})
+        z_cfg = pid_cfg.get('z', {})
+        roll_cfg = pid_cfg.get('roll', {})
+        pitch_cfg = pid_cfg.get('pitch', {})
+        yaw_cfg = pid_cfg.get('yaw', {})
         # Instantiate PID controllers with config-driven gains
-        self.x_pid = PIDController(kp=x_cfg.get("kp", 0.2), ki=x_cfg.get("ki", 0.0), kd=x_cfg.get("kd", 0.3))
-        self.y_pid = PIDController(kp=y_cfg.get("kp", 0.2), ki=y_cfg.get("ki", 0.0), kd=y_cfg.get("kd", 0.3))
-        self.z_pid = PIDController(kp=z_cfg.get("kp", 1.5), ki=z_cfg.get("ki", 0.2), kd=z_cfg.get("kd", 3.0))
-        self.roll_pid = PIDController(kp=roll_cfg.get("kp", 2.0), ki=roll_cfg.get("ki", 0.0), kd=roll_cfg.get("kd", 0.3))
-        self.pitch_pid = PIDController(kp=pitch_cfg.get("kp", 2.0), ki=pitch_cfg.get("ki", 0.0), kd=pitch_cfg.get("kd", 0.3))
-        self.yaw_pid = PIDController(kp=yaw_cfg.get("kp", 1.0), ki=yaw_cfg.get("ki", 0.0), kd=yaw_cfg.get("kd", 0.1))
+        self.x_pid = PIDController(kp=x_cfg.get('kp', 0.2), ki=x_cfg.get('ki', 0.0), kd=x_cfg.get('kd', 0.3))
+        self.y_pid = PIDController(kp=y_cfg.get('kp', 0.2), ki=y_cfg.get('ki', 0.0), kd=y_cfg.get('kd', 0.3))
+        self.z_pid = PIDController(kp=z_cfg.get('kp', 1.5), ki=z_cfg.get('ki', 0.2), kd=z_cfg.get('kd', 3.0))
+        self.roll_pid = PIDController(kp=roll_cfg.get('kp', 2.0), ki=roll_cfg.get('ki', 0.0), kd=roll_cfg.get('kd', 0.3))
+        self.pitch_pid = PIDController(kp=pitch_cfg.get('kp', 2.0), ki=pitch_cfg.get('ki', 0.0), kd=pitch_cfg.get('kd', 0.3))
+        self.yaw_pid = PIDController(kp=yaw_cfg.get('kp', 1.0), ki=yaw_cfg.get('ki', 0.0), kd=yaw_cfg.get('kd', 0.1))
         # Reset integral and previous error state for all PIDs
         for pid in (self.x_pid, self.y_pid, self.z_pid, self.roll_pid, self.pitch_pid, self.yaw_pid):
             pid.reset()
@@ -80,9 +91,11 @@ class StabilityController(Controller):
         q_desired = Quaternion.from_euler(self.roll_setpoint, self.pitch_setpoint, self.yaw_setpoint)
         q_error = q_desired * q_current.conjugate()
         q_error.normalize()
-        # Small-angle approximation: rotation vector ~ 2 * [x, y, z]
-        err_vec = 2 * q_error.q[1:]
-        roll_error, pitch_error, yaw_error = err_vec.tolist()
+        # Axis-angle error vector in inertial frame
+        rot_vec = q_error.to_rotation_vector()
+        # Express error in body axes by rotating into local frame
+        err_body = q_current.conjugate().rotate(rot_vec)
+        roll_error, pitch_error, yaw_error = err_body.v.tolist()
         # Update PIDs with pre-computed errors
         pitch_cmd = float(np.clip(self.x_pid.update(x_error, dt), -0.3, 0.3))
         roll_cmd = float(np.clip(-self.y_pid.update(y_error, dt), -0.3, 0.3))
@@ -110,4 +123,31 @@ class StabilityController(Controller):
         if pitch is not None:
             self.pitch_setpoint = pitch
         if yaw is not None:
-            self.yaw_setpoint = yaw 
+            self.yaw_setpoint = wrap_angle(yaw)
+
+# -----------------------------------------------------------------------------
+# GenericMixer moved here from targets/sim/components.py
+class GenericMixer(Actuator):
+    """Generic mixer for arbitrary multirotor geometry."""
+    def __init__(self, motor_positions, spins, kT=1.0, kQ=0.02):
+        if len(motor_positions) != len(spins):
+            raise ValueError("motor_positions and spins must have same length")
+        self.motor_positions = motor_positions
+        self.spins = spins
+        self.kT = kT
+        self.kQ = kQ
+        rows = []
+        rows.append([kT] * len(spins))
+        rows.append([pos.v[1] * kT for pos in motor_positions])
+        rows.append([-pos.v[0] * kT for pos in motor_positions])
+        rows.append([s * kQ for s in spins])
+        self._A = np.array(rows)
+        self._A_inv = np.linalg.pinv(self._A)
+
+    def apply_to(self, obj, dt):
+        cmd = getattr(obj, 'control_command', None)
+        if cmd is None or len(cmd) != 4:
+            return
+        thrusts = np.dot(self._A_inv, np.array(cmd))
+        thrusts = np.clip(thrusts, 0.0, None)
+        obj.motor_thrusts = thrusts 

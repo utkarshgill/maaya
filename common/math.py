@@ -1,4 +1,5 @@
 import numpy as np
+import math
 
 class Vector3D:
     def __init__(self, x=0, y=0, z=0):
@@ -164,4 +165,27 @@ class Quaternion:
         return Quaternion(w, x, y, z)
 
     def __repr__(self):
-        return f"Quaternion({self.q[0]}, {self.q[1]}, {self.q[2]}, {self.q[3]})" 
+        return f"Quaternion({self.q[0]}, {self.q[1]}, {self.q[2]}, {self.q[3]})"
+
+    def to_rotation_vector(self):
+        """Return rotation vector (axis-angle) representation avoiding singularities."""
+        w, x, y, z = self.q
+        # clamp scalar part for numerical safety
+        w = max(min(w, 1.0), -1.0)
+        # ensure shortest rotation (angle <= pi)
+        if w < 0.0:
+            w = -w
+            x = -x; y = -y; z = -z
+        v = np.array([x, y, z], dtype=float)
+        v_norm = np.linalg.norm(v)
+        if v_norm < 1e-6:
+            return Vector3D(0.0, 0.0, 0.0)
+        axis = v / v_norm
+        angle = 2 * math.acos(w)
+        return Vector3D(*(axis * angle))
+
+def wrap_angle(x: float) -> float:
+    """Normalize angle x to the range [-pi, pi)."""
+    return (x + math.pi) % (2 * math.pi) - math.pi
+
+GRAVITY = 9.8 

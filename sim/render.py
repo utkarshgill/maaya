@@ -1,8 +1,5 @@
 import numpy as np
 
-# Only PyBulletRenderer is supported now; MatplotlibRenderer removed
-
-# Add PyBullet based renderer and make it default
 try:
     import pybullet as p
 except ImportError:
@@ -239,32 +236,6 @@ else:
                     self.p.resetBasePositionAndOrientation(
                         robot_id, pos_list, rotated_draw_orn
                     )
-
-                # Draw arms only for the quadcopter
-                if is_quad and body == target_body_for_camera: 
-                    orientation_matrix = body.orientation.as_rotation_matrix()
-                    for i, endpoint_local_np in enumerate(self.arm_local_endpoints):
-                        p0_world_np = pos_np
-                        p1_world_np = pos_np + orientation_matrix.dot(endpoint_local_np)
-                        color_rgb = self.arm_colors[i][:3]
-                        line_width = 3.0
-
-                        if self.arm_debug_line_ids[i] is None:
-                            self.arm_debug_line_ids[i] = self.p.addUserDebugLine(
-                                p0_world_np.tolist(), 
-                                p1_world_np.tolist(), 
-                                lineColorRGB=color_rgb,
-                                lineWidth=line_width,
-                                lifeTime=0 # Persistent, will be updated
-                            )
-                        else:
-                            self.p.addUserDebugLine(
-                                p0_world_np.tolist(), 
-                                p1_world_np.tolist(), 
-                                lineColorRGB=color_rgb,
-                                lineWidth=line_width,
-                                replaceItemUniqueId=self.arm_debug_line_ids[i]
-                            )
 
             if target_body_for_camera:
                 target_pos_list = target_body_for_camera.position.v.tolist()

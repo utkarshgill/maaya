@@ -21,8 +21,4 @@ def get_target(name):
     try:
         return _targets[name]()
     except KeyError:
-        raise KeyError(f"Target '{name}' not found")
-
-# Import all target modules to register them
-from .default import default_target  # noqa: F401
-from .sim_dualsense import sim_target  # noqa: F401 
+        raise KeyError(f"Target '{name}' not found") 
