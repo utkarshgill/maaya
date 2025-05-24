@@ -28,7 +28,7 @@ def main():
     # Dispatch to simulator if requested
     target_name = config.get("target", None)
     if target_name == "sim":
-        from targets.sim import Simulator
+        from target.sim import Simulator
         Simulator().run()
         return
 
@@ -46,5 +46,5 @@ def main():
     scheduler.run()
 
 if __name__ == "__main__":
-    from targets.sim import Simulator
+    from target.sim import Simulator
     Simulator().run() 

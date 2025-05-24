@@ -17,7 +17,6 @@ from sim import (
     GravitationalForce, RungeKuttaIntegrator, GroundCollision,
     IMUSensor, Motor, Renderer, Actuator
 )
-from firmware.hil import Keyboard
 from firmware.control import StabilityController, GenericMixer
 from sim.engine import Quadcopter, GraspActuator
 from common.scheduler import Scheduler  # scheduler for discrete stepping
@@ -26,8 +25,10 @@ class Simulator(Env):
     """Gymnasium environment for a quadrotor hovering demo using miniflight."""
     metadata = {'render_modes': ['human'], 'render_fps': 50}
 
-    def __init__(self, render_mode='human', dt=0.01, frame_skip=1, config='X'):
+    def __init__(self, render_mode='human', dt=0.01, frame_skip=1, config='X', hil=None):
         super().__init__()
+        # External HIL object provided by Board (for pick/drop)
+        self.hil = hil
         self.render_mode = render_mode
         self.dt = dt
         self.frame_skip = frame_skip
@@ -37,8 +38,6 @@ class Simulator(Env):
 
         # Instantiate stability controller (shared with Board interface)
         self.stability_ctrl = StabilityController()
-        # HIL (keyboard/dualsense) is provided by Board for pick/drop, assign env.hil externally
-        self.hil = None
 
         self._build_sim()
         # Build a private scheduler for discrete stepping (actuate→integrate→sense)
@@ -59,7 +58,8 @@ class Simulator(Env):
         dim = (1 + spec['position']['shape'][0] + spec['velocity']['shape'][0]
                + spec['orientation']['shape'][0] + spec['angular_velocity']['shape'][0])
         self.observation_space = spaces.Box(-np.inf, np.inf, shape=(dim,), dtype=np.float32)
-        self.action_space = spaces.Box(-np.inf, np.inf, shape=(4,), dtype=np.float32)
+        # Action: [thrust, roll, pitch, yaw, pick_flag]
+        self.action_space = spaces.Box(-np.inf, np.inf, shape=(5,), dtype=np.float32)
 
         self.renderer = None
         # Flag to track keyboard pickup/drop handling
@@ -142,8 +142,14 @@ class Simulator(Env):
 
     def step(self, action):
         """Advance simulation using the externally provided *action* vector via the internal scheduler."""
-        # Inject control command into the quad
-        self.quad.control_command = action
+        # Parse pick/drop flag from action
+        pick_flag = float(action[4]) if len(action) > 4 else 0.0
+        # Inject motor commands (first 4 elements)
+        cmd4 = list(action[:4])
+        self.quad.control_command = cmd4
+        # Handle pick/drop if requested
+        if pick_flag:
+            self._handle_pick_drop()
         # Advance physics frames: each sched.step() runs sense→actuate→integrate for dt
         for _ in range(self.frame_skip):
             self._sched.step()
@@ -159,24 +165,9 @@ class Simulator(Env):
         # Initialize renderer once
         if self.renderer is None:
             self.renderer = Renderer(self.world, config=self.config)
-        # Delegate to PyBullet HIL for pick/drop input
-        if self.hil and hasattr(self.hil, 'handle_pybullet') and hasattr(self.renderer, 'p'):
+        # Delegate to HIL for pick/drop keyboard events
+        if self.hil and hasattr(self.hil, 'handle_pybullet'):
             self.hil.handle_pybullet(self.renderer)
-        # Handle keyboard pickup/drop (Keyboard HIL only)
-        if isinstance(self.hil, Keyboard):
-            kb_down = self.hil.key_state.get('x') or self.hil.key_state.get(' ')
-            if kb_down and not self._kb_handled:
-                self._handle_pick_drop()
-                self._kb_handled = True
-            elif not kb_down:
-                self._kb_handled = False
-        # Handle PS5 cross pickup/drop (DualSense HIL only)
-        if hasattr(self.hil, 'cross_pressed') and hasattr(self.hil, 'cross_handled'):
-            if self.hil.cross_pressed and not self.hil.cross_handled:
-                self._handle_pick_drop()
-                self.hil.cross_handled = True
-            if not self.hil.cross_pressed and self.hil.cross_handled:
-                self.hil.cross_handled = False
         # Draw current state (PyBullet draw advances simulation internally)
         self.renderer.draw()
 
@@ -266,11 +257,10 @@ if __name__ == '__main__':
     """Minimal manual loop: Board scheduler driving control and Simulator scheduler driving physics."""
     from firmware.board import Board
 
-    # Initialize environment and firmware Board
-    env = Simulator(render_mode='human')
-    board = Board(dt=env.dt, controller=env.stability_ctrl)
-    # Link Board HIL to environment for pick/drop handling
-    env.hil = board.hil
+    # Initialize firmware Board (contains HIL) first
+    board = Board(dt=0.01)
+    # Initialize environment with Board's HIL for pick/drop and keyboard
+    env = Simulator(render_mode='human', dt=board.dt, hil=board.hil)
 
     # Reset to get initial observation
     obs, _ = env.reset()

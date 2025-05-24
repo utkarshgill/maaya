@@ -33,6 +33,8 @@ class Board(HAL):
         # Register read and control tasks at dt
         self._sched.add_task(self._read_task, period=self.dt)
         self._sched.add_task(self._control_task, period=self.dt)
+        # Pick/drop state
+        self._pick_handled = False
 
     # ------------------------------------------------------------------
     # Public API
@@ -75,14 +77,30 @@ class Board(HAL):
         )
 
     def _control_task(self):
-        """Scheduler task: update setpoints via HIL, then run controller to compute action."""
+        """Scheduler task: update setpoints via HIL, compute control, detect pick/drop."""
         if self._body is None:
             return
-        # Update stability controller setpoints based on HIL input
+        # 1) Update stability controller setpoints based on HIL input
         if self.hil:
             self.hil.update(self.controller, self.dt)
-        # Compute and store latest action
-        self._latest_action = self.controller.update(self._body, self.dt)
+        # 2) Compute base motor commands
+        base_cmds = self.controller.update(self._body, self.dt)
+        # 3) Detect pick/drop button press
+        pick_flag = 0.0
+        # Keyboard X or space
+        kb_down = False
+        if isinstance(self.hil, Keyboard):
+            kb_down = bool(self.hil.key_state.get('x')) or bool(self.hil.key_state.get(' '))
+        # DualSense cross button
+        if hasattr(self.hil, 'cross_pressed'):
+            kb_down = kb_down or bool(self.hil.cross_pressed)
+        if kb_down and not self._pick_handled:
+            pick_flag = 1.0
+            self._pick_handled = True
+        elif not kb_down:
+            self._pick_handled = False
+        # 4) Store action vector = [thrust, roll, pitch, yaw, pick_flag]
+        self._latest_action = list(base_cmds) + [pick_flag]
 
     def write(self, commands):
         """Convert controller outputs to motor action vector."""

@@ -6,7 +6,7 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from targets.sim import Simulator
+from target.sim import Simulator
 
 if __name__ == '__main__':
     import os

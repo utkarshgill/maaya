@@ -17,21 +17,15 @@ Open source flight controllers are bloated, complex, and nearly impossible to de
 
 ## Getting Started
 
-1. Clone and enter the repo:
-   ```bash
-   git clone https://github.com/utkarshgill/miniflight.git
-   cd miniflight
-   ```
-
-2. Install dependencies & create environment:
+1. Install dependencies & create environment:
    ```bash
    bash setup.sh
    conda activate pybullet_env
    ```
 
-3. Run the quadrotor simulation:
+2. Run the quad simulation:
    ```bash
-   python examples/quad_hover_env.py
+   python target/sim.py
    ```
 
 Use PS5 DualSense or keyboard:
