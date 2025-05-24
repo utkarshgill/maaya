@@ -88,7 +88,7 @@ class World:
         sched = Scheduler()
         # Break down update into individual phases at dt intervals
         sched.add_task(lambda: self._sense(self.dt), period=self.dt)
-        sched.add_task(lambda: self._control(self.dt), period=self.dt)
+        # removed internal control scheduling; control is now handled by external Board
         sched.add_task(lambda: self._actuate(self.dt), period=self.dt)
         # Integrate and record state
         def _integrate_and_record():
@@ -100,6 +100,18 @@ class World:
         if render_fn:
             sched.add_task(render_fn, period=1.0/render_fps)
         sched.run()
+
+    def update(self):
+        """Advance the simulation by one internal time‐step (dt). Useful for step-by-step
+        control loops where an external agent provides actions each iteration."""
+        # Sense → Actuate → Integrate (control is external)
+        self._sense(self.dt)
+        # removed internal control invocation; use external Board.update()
+        self._actuate(self.dt)
+        self._integrate(self.dt)
+        # Update time and cached state vectors
+        self.time += self.dt
+        self.current_state, self.current_flat = self.get_state()
 
 # --- Rigid-body dynamics relocated from dynamics.py ---
 GRAVITY = 9.8

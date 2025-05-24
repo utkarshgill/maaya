@@ -131,7 +131,10 @@ class DualSense(HIL):
     def update(self, stability_ctrl, dt):
         # Read PS5 input if available and update stability controller setpoints
         if self.h:
-            data = self.h.read(64)
+            try:
+                data = self.h.read(64)
+            except OSError:
+                data = None
             if data and data[0] == REPORT_ID:
                 # Update cross button and stick inputs
                 self.cross_pressed = bool(data[8] & 0x20)

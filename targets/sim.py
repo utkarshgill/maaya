@@ -10,21 +10,19 @@ for _p in (str(_SRC), str(_ROOT)):
         sys.path.insert(0, _p)
 
 import gymnasium as gym
-from gymnasium import spaces
+from gymnasium import spaces, Env
 import numpy as np
-from firmware.hal import HAL
-
 from sim import (
     Vector3D, Quaternion, Body, World,
     GravitationalForce, RungeKuttaIntegrator, GroundCollision,
-    IMUSensor, # Controller and PIDController are now in firmware
-    Motor, Renderer, Actuator
+    IMUSensor, Motor, Renderer, Actuator
 )
-from firmware.hil import Keyboard, DualSense
+from firmware.hil import Keyboard
 from firmware.control import StabilityController, GenericMixer
 from sim.engine import Quadcopter, GraspActuator
+from common.scheduler import Scheduler  # scheduler for discrete stepping
 
-class Simulator(HAL):
+class Simulator(Env):
     """Gymnasium environment for a quadrotor hovering demo using miniflight."""
     metadata = {'render_modes': ['human'], 'render_fps': 50}
 
@@ -37,20 +35,31 @@ class Simulator(HAL):
         self.carrying_box = None
         self.pickup_radius = 0.75  # slightly increased grasping distance for easier pickup
 
-        # Instantiate stability controller
+        # Instantiate stability controller (shared with Board interface)
         self.stability_ctrl = StabilityController()
-        self.keyboard = Keyboard()
-        self.dualsense = DualSense()
-        self.hil = self.dualsense if getattr(self.dualsense, 'h', None) else self.keyboard
+        # HIL (keyboard/dualsense) is provided by Board for pick/drop, assign env.hil externally
+        self.hil = None
 
         self._build_sim()
+        # Build a private scheduler for discrete stepping (actuate→integrate→sense)
+        self._sched = Scheduler(time_fn=lambda: self.world.time)
+        # 1) Actuate based on last control_command
+        self._sched.add_task(lambda: self.world._actuate(self.dt), period=self.dt)
+        # 2) Integrate dynamics and record state
+        def _integrate_and_record():
+            self.world._integrate(self.dt)
+            self.world.time += self.dt
+            self.world.current_state, self.world.current_flat = self.world.get_state()
+        self._sched.add_task(_integrate_and_record, period=self.dt)
+        # 3) Sense for next control cycle
+        self._sched.add_task(lambda: self.world._sense(self.dt), period=self.dt)
 
         # Define spaces
         spec = self.world.state_spec
         dim = (1 + spec['position']['shape'][0] + spec['velocity']['shape'][0]
                + spec['orientation']['shape'][0] + spec['angular_velocity']['shape'][0])
         self.observation_space = spaces.Box(-np.inf, np.inf, shape=(dim,), dtype=np.float32)
-        self.action_space = spaces.Box(-np.inf, np.inf, shape=(0,), dtype=np.float32)
+        self.action_space = spaces.Box(-np.inf, np.inf, shape=(4,), dtype=np.float32)
 
         self.renderer = None
         # Flag to track keyboard pickup/drop handling
@@ -63,9 +72,6 @@ class Simulator(HAL):
         self.quad.add_sensor(IMUSensor(accel_noise_std=0.0, gyro_noise_std=0.0))
         self.quad.urdf_filename = "quadrotor.urdf" # Explicitly assign URDF for the quad
         
-        # Add the stability controller to the quad.
-        self.quad.add_controller(self.stability_ctrl)
-
         # Add actuators to the quad (configurable X or plus)
         L = self.quad.arm_length
         if self.config.upper() == 'X':
@@ -122,17 +128,25 @@ class Simulator(HAL):
         """
         # Rebuild simulation to initial conditions
         self._build_sim()
+        # Ensure state caches are populated
+        self.world.update()
         obs, _ = self.get_state()
         return obs, {}
 
     def get_state(self):
-        """Return current state dict and flat numpy array maintained by World."""
-        return self.world.current_state, self.world.current_flat
+        """Return observation (flat numpy array) and full state dict."""
+        # Ensure state is up-to-date. If still None (e.g. before first update), call world.update().
+        if self.world.current_flat is None:
+            self.world.update()
+        return self.world.current_flat, self.world.current_state
 
     def step(self, action):
-        # Advance the simulation by fixed dt steps
+        """Advance simulation using the externally provided *action* vector via the internal scheduler."""
+        # Inject control command into the quad
+        self.quad.control_command = action
+        # Advance physics frames: each sched.step() runs sense→actuate→integrate for dt
         for _ in range(self.frame_skip):
-            self.world.update()
+            self._sched.step()
         obs, _ = self.get_state()
         reward = 0.0
         done = False
@@ -145,11 +159,9 @@ class Simulator(HAL):
         # Initialize renderer once
         if self.renderer is None:
             self.renderer = Renderer(self.world, config=self.config)
-        # Delegate to PyBullet HIL for input
-        if hasattr(self.renderer, 'p') and hasattr(self.hil, 'handle_pybullet'):
+        # Delegate to PyBullet HIL for pick/drop input
+        if self.hil and hasattr(self.hil, 'handle_pybullet') and hasattr(self.renderer, 'p'):
             self.hil.handle_pybullet(self.renderer)
-        # Update stability controller setpoints based on HIL input
-        self.hil.update(self.stability_ctrl, self.dt)
         # Handle keyboard pickup/drop (Keyboard HIL only)
         if isinstance(self.hil, Keyboard):
             kb_down = self.hil.key_state.get('x') or self.hil.key_state.get(' ')
@@ -251,5 +263,27 @@ def _stdin_reader(ctrl_ref):
 
 # -------------------------------------------------------------------------
 if __name__ == '__main__':
-    # Run the simulator
-    Simulator().run()
+    """Minimal manual loop: Board scheduler driving control and Simulator scheduler driving physics."""
+    from firmware.board import Board
+
+    # Initialize environment and firmware Board
+    env = Simulator(render_mode='human')
+    board = Board(dt=env.dt, controller=env.stability_ctrl)
+    # Link Board HIL to environment for pick/drop handling
+    env.hil = board.hil
+
+    # Reset to get initial observation
+    obs, _ = env.reset()
+    done = False
+    try:
+        while not done:
+            # 1) Firmware control computes action via its internal scheduler
+            action = board.update(obs)
+            # 2) Simulator steps its scheduler and returns next observation
+            obs, reward, done, info = env.step(action)
+            # 3) Render current state
+            env.render()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        env.close()
