@@ -151,3 +151,8 @@ class GenericMixer(Actuator):
         thrusts = np.dot(self._A_inv, np.array(cmd))
         thrusts = np.clip(thrusts, 0.0, None)
         obj.motor_thrusts = thrusts 
+
+    def mix(self, cmd):
+        """Mix a 4-channel command into per-motor thrusts without needing an obj."""
+        thrusts = np.dot(self._A_inv, np.array(cmd))
+        return np.clip(thrusts, 0.0, None) 

@@ -18,6 +18,8 @@ from sim import (
     IMUSensor, Motor, Renderer, Actuator
 )
 from firmware.control import StabilityController, GenericMixer
+from firmware.hal import HAL
+from firmware.hil import Keyboard, DualSense
 from sim.engine import Quadcopter, GraspActuator
 from common.scheduler import Scheduler  # scheduler for discrete stepping
 
@@ -58,7 +60,7 @@ class Simulator(Env):
         dim = (1 + spec['position']['shape'][0] + spec['velocity']['shape'][0]
                + spec['orientation']['shape'][0] + spec['angular_velocity']['shape'][0])
         self.observation_space = spaces.Box(-np.inf, np.inf, shape=(dim,), dtype=np.float32)
-        # Action: [thrust, roll, pitch, yaw, pick_flag]
+        # Action: [motor1_thrust, motor2_thrust, motor3_thrust, motor4_thrust, pick_flag]
         self.action_space = spaces.Box(-np.inf, np.inf, shape=(5,), dtype=np.float32)
 
         self.renderer = None
@@ -90,7 +92,6 @@ class Simulator(Env):
                 Vector3D(0, -L, 0),  # right
             ]
         spins = [1, -1, 1, -1]
-        self.quad.add_actuator(GenericMixer(motor_positions, spins, kT=1.0, kQ=0.02))
         for idx, (r, s) in enumerate(zip(motor_positions, spins)):
             self.quad.add_actuator(Motor(idx, r_body=r, spin=s,
                                           thrust_noise_std=0.0, torque_noise_std=0.0))
@@ -144,9 +145,8 @@ class Simulator(Env):
         """Advance simulation using the externally provided *action* vector via the internal scheduler."""
         # Parse pick/drop flag from action
         pick_flag = float(action[4]) if len(action) > 4 else 0.0
-        # Inject motor commands (first 4 elements)
-        cmd4 = list(action[:4])
-        self.quad.control_command = cmd4
+        # Inject per-motor thrusts directly from firmware
+        self.quad.motor_thrusts = list(action[:4])
         # Handle pick/drop if requested
         if pick_flag:
             self._handle_pick_drop()
@@ -232,6 +232,105 @@ class Simulator(Env):
         self.world.run(render_fn=_auto_render if self.render_mode else None,
                        render_fps=self.metadata.get('render_fps', 50))
 
+# -------------------------------------------------------------------------
+# Board moved in from firmware/board.py
+class Board(HAL):
+    """Firmware-side abstraction that runs control algorithms at its own rate.
+
+    Board.update(obs) -> actions
+    obs is expected to be a flat numpy array matching World.get_state() spec.
+    """
+    def __init__(self, dt: float = 0.01, controller: StabilityController = None,
+                 config: str = 'X', arm_length: float = 0.3, kT: float = 1.0, kQ: float = 0.02):
+        super().__init__(config=None)
+        self.dt = dt
+        self._sim_time = 0.0
+        self._latest_obs = None
+        self._body = None
+        self._latest_action = None
+        self.controller = controller if controller is not None else StabilityController()
+        # On-board mixer
+        self.config = config
+        L = arm_length
+        if self.config.upper() == 'X':
+            diag = L / np.sqrt(2)
+            motor_positions = [
+                Vector3D(diag, diag, 0),
+                Vector3D(-diag, diag, 0),
+                Vector3D(-diag, -diag, 0),
+                Vector3D(diag, -diag, 0),
+            ]
+        else:
+            motor_positions = [
+                Vector3D(L, 0, 0),
+                Vector3D(0, L, 0),
+                Vector3D(-L, 0, 0),
+                Vector3D(0, -L, 0),
+            ]
+        spins = [1, -1, 1, -1]
+        self.mixer = GenericMixer(motor_positions, spins, kT, kQ)
+        # HIL interfaces
+        self.keyboard = Keyboard()
+        self.dualsense = DualSense()
+        self.hil = self.dualsense if getattr(self.dualsense, 'h', None) else self.keyboard
+        # Scheduler
+        self._sched = Scheduler(time_fn=lambda: self._sim_time)
+        self._sched.add_task(self._read_task, period=self.dt)
+        self._sched.add_task(self._control_task, period=self.dt)
+        self._pick_handled = False
+
+    def update(self, obs):
+        self._latest_obs = obs
+        try:
+            self._sim_time = float(obs[0])
+        except Exception:
+            self._sim_time += self.dt
+        self._sched.step()
+        if self._latest_action is None and self._body is not None:
+            self._latest_action = self.controller.update(self._body, self.dt)
+        return self._latest_action
+
+    def _read_task(self):
+        if self._latest_obs is None:
+            return
+        obs = self._latest_obs
+        px, py, pz = obs[1:4]
+        vx, vy, vz = obs[4:7]
+        qw, qx, qy, qz = obs[7:11]
+        wx, wy, wz = obs[11:14]
+        self._body = Body(
+            position=Vector3D(px, py, pz),
+            velocity=Vector3D(vx, vy, vz),
+            orientation=Quaternion(qw, qx, qy, qz),
+            angular_velocity=Vector3D(wx, wy, wz),
+            mass=1.0
+        )
+
+    def _control_task(self):
+        if self._body is None:
+            return
+        if self.hil:
+            self.hil.update(self.controller, self.dt)
+        base_cmds = self.controller.update(self._body, self.dt)
+        thrusts = list(self.mixer.mix(base_cmds))
+        # pick/drop
+        pick_flag = 0.0
+        kb_down = False
+        if isinstance(self.hil, Keyboard):
+            kb_down = bool(self.hil.key_state.get('x')) or bool(self.hil.key_state.get(' '))
+        if hasattr(self.hil, 'cross_pressed'):
+            kb_down = kb_down or bool(self.hil.cross_pressed)
+        if kb_down and not self._pick_handled:
+            pick_flag = 1.0
+            self._pick_handled = True
+        elif not kb_down:
+            self._pick_handled = False
+        self._latest_action = thrusts + [pick_flag]
+
+    def write(self, commands):
+        return commands
+# -------------------------------------------------------------------------
+
 def _stdin_reader(ctrl_ref):
     print("\n\n--- Background command listener started ---")
     print("Enter 'x,y,z' to set target position (e.g. '0,0,1.5')")
@@ -257,8 +356,7 @@ def _stdin_reader(ctrl_ref):
 # -------------------------------------------------------------------------
 if __name__ == '__main__':
     """Minimal manual loop: Board scheduler driving control and Simulator scheduler driving physics."""
-    from firmware.board import Board
-
+    # Board is defined above in this file
     # Initialize firmware Board (contains HIL) first
     board = Board(dt=0.01)
     # Initialize environment with Board's HIL for pick/drop and keyboard
