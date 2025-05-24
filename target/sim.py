@@ -157,19 +157,17 @@ class Simulator(Env):
         reward = 0.0
         done = False
         info = {}
+        # Automatic rendering for human mode
+        if self.render_mode:
+            # lazy-init renderer
+            if self.renderer is None:
+                self.renderer = Renderer(self.world, config=self.config)
+            # HIL keyboard/pick-drop inside renderer
+            if self.hil and hasattr(self.hil, 'handle_pybullet'):
+                self.hil.handle_pybullet(self.renderer)
+            # draw the scene
+            self.renderer.draw()
         return obs, reward, done, info
-
-    def render(self, mode=None):
-        if self.render_mode is None:
-            return None
-        # Initialize renderer once
-        if self.renderer is None:
-            self.renderer = Renderer(self.world, config=self.config)
-        # Delegate to HIL for pick/drop keyboard events
-        if self.hil and hasattr(self.hil, 'handle_pybullet'):
-            self.hil.handle_pybullet(self.renderer)
-        # Draw current state (PyBullet draw advances simulation internally)
-        self.renderer.draw()
 
     def close(self):
         if not self.renderer:
@@ -217,17 +215,21 @@ class Simulator(Env):
             print("Dropped box")
 
     def run(self, realtime=True):
-        """
-        Run the simulation and rendering in real time using multi-rate scheduling.
-        """
+        """Run the simulation and rendering in real time using multi-rate scheduling."""
         # Reset environment
         self.reset()
-        # Initialize renderer
+        # Initialize renderer once
         if self.render_mode and self.renderer is None:
             self.renderer = Renderer(self.world, config=self.config)
 
-        # Run real-time loop via World
-        self.world.run(render_fn=self.render if self.render_mode else None,
+        # Inline automatic render callback (handles HIL pick/drop and drawing)
+        def _auto_render():
+            if self.hil and hasattr(self.hil, 'handle_pybullet'):
+                self.hil.handle_pybullet(self.renderer)
+            self.renderer.draw()
+
+        # Run real-time loop via World with automatic rendering
+        self.world.run(render_fn=_auto_render if self.render_mode else None,
                        render_fps=self.metadata.get('render_fps', 50))
 
 def _stdin_reader(ctrl_ref):
@@ -271,8 +273,6 @@ if __name__ == '__main__':
             action = board.update(obs)
             # 2) Simulator steps its scheduler and returns next observation
             obs, reward, done, info = env.step(action)
-            # 3) Render current state
-            env.render()
     except KeyboardInterrupt:
         pass
     finally:
