@@ -87,15 +87,16 @@ class World:
         from common.scheduler import Scheduler
         sched = Scheduler()
         # Break down update into individual phases at dt intervals
-        sched.add_task(lambda: self._sense(self.dt), period=self.dt)
-        # removed internal control scheduling; control is now handled by external Board
+        # 1) Actuate based on last control_command
         sched.add_task(lambda: self._actuate(self.dt), period=self.dt)
-        # Integrate and record state
+        # 2) Integrate dynamics and record state
         def _integrate_and_record():
             self._integrate(self.dt)
             self.time += self.dt
             self.current_state, self.current_flat = self.get_state()
         sched.add_task(_integrate_and_record, period=self.dt)
+        # 3) Sense for next control cycle
+        sched.add_task(lambda: self._sense(self.dt), period=self.dt)
         # Optional render task
         if render_fn:
             sched.add_task(render_fn, period=1.0/render_fps)
@@ -104,11 +105,10 @@ class World:
     def update(self):
         """Advance the simulation by one internal time‐step (dt). Useful for step-by-step
         control loops where an external agent provides actions each iteration."""
-        # Sense → Actuate → Integrate (control is external)
-        self._sense(self.dt)
-        # removed internal control invocation; use external Board.update()
+        # Actuate → Integrate → Sense (control is external)
         self._actuate(self.dt)
         self._integrate(self.dt)
+        self._sense(self.dt)
         # Update time and cached state vectors
         self.time += self.dt
         self.current_state, self.current_flat = self.get_state()

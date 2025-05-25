@@ -32,5 +32,6 @@ conda install -c conda-forge pybullet -y
 # Step 5: Install Python dependencies via pip
 echo "Installing other Python dependencies..."
 pip install matplotlib hidapi gymnasium
+pip install -e .
 
 echo "Setup complete. Run 'conda activate ${ENV_NAME}' to activate the environment." 

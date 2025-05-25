@@ -12,12 +12,10 @@ class HAL:
         """Initialize HAL with optional configuration."""
         self.config = config
 
-    def read(self, data):
-        """Read raw input data (e.g., observations) and parse into structured form.
-        Must be implemented by subclasses."""
+    def read(self):
+        """Read raw sensor data (e.g., observations). Must be implemented by subclass."""
         raise NotImplementedError("HAL.read() must be implemented by subclass")
 
     def write(self, commands):
-        """Write actuator commands and return output action.
-        Must be implemented by subclasses."""
+        """Write actuator commands. Must be implemented by subclass."""
         raise NotImplementedError("HAL.write() must be implemented by subclass") 
