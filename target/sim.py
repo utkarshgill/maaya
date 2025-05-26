@@ -8,7 +8,7 @@ if str(_ROOT) not in sys.path:
 
 import os
 import numpy as np
-from firmware.hal import HAL
+from miniflight.hal import HAL
 from sim import Vector3D, World, RungeKuttaIntegrator, GravitationalForce, GroundCollision, IMUSensor, Motor, Renderer
 from sim.engine import Quadcopter
 
@@ -78,5 +78,5 @@ class Board(HAL):
 if __name__ == '__main__':
     # Run firmware main loop in simulation mode
     os.environ['TARGET'] = 'sim'
-    from firmware.main import main
+    from miniflight.main import main
     main() 

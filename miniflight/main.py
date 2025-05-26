@@ -7,9 +7,9 @@ import os
 
 from common.logger import get_logger
 from common.scheduler import Scheduler
-from firmware.control import StabilityController, GenericMixer
-from firmware.hal      import HAL
-from firmware.hil      import Keyboard, DualSense
+from miniflight.control import StabilityController, GenericMixer
+from miniflight.hal      import HAL
+from miniflight.hil      import Keyboard, DualSense
 
 logger = get_logger("firmware")
 

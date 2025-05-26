@@ -13,7 +13,7 @@ from common.math import wrap_angle
 VENDOR_ID = 0x054C
 PRODUCT_ID = 0x0CE6
 REPORT_ID = 0x01
-from firmware.control import StabilityController
+from miniflight.control import StabilityController
 
 class HIL:
     """
